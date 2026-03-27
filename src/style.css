@@ -305,19 +305,22 @@ button:disabled,
 
 .canvas-shell {
   width: 100%;
-  max-width: 1440px;
+  max-width: 1320px;
+  max-height: calc(100vh - 220px);
   min-height: 0;
   border-radius: 24px;
-  padding: 12px;
+  padding: 10px;
   background: linear-gradient(180deg, rgba(13, 24, 34, 0.98), rgba(7, 15, 22, 0.98));
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 #game-canvas {
-  width: min(100%, 1400px);
+  width: min(90%, 1240px);
   aspect-ratio: 3 / 2;
+  max-height: calc(100vh - 244px);
   min-height: 0;
   display: flex;
   align-items: center;
@@ -496,7 +499,7 @@ button:disabled,
 .tutorial-card {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  bottom: 108px;
   transform: translateX(-50%);
   width: min(480px, calc(100vw - 32px));
   border-radius: 22px;
@@ -589,5 +592,12 @@ button:disabled,
     width: 100%;
     min-width: 0;
   }
+
+  .tutorial-card {
+    bottom: 20px;
+  }
 }
+
+
+
 
