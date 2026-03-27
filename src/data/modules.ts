@@ -1,0 +1,58 @@
+﻿import type { ModuleDefinition, ModuleId } from "../types/gameTypes";
+
+export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
+  solar_collector: {
+    id: "solar_collector",
+    name: "Solar Collector",
+    shortName: "SOL",
+    description: "Produces solar income each cycle and powers solar-based merges.",
+    color: 0xf6d35c,
+    icon: "S",
+    fabricationCost: { solar: 10, minerals: 6, scrap: 12 },
+  },
+  mineral_drill: {
+    id: "mineral_drill",
+    name: "Mineral Drill",
+    shortName: "DRL",
+    description: "Mines the moon objective and anchors industrial bot recipes.",
+    color: 0x69c0ff,
+    icon: "M",
+    fabricationCost: { solar: 8, minerals: 12, scrap: 10 },
+  },
+  shield_emitter: {
+    id: "shield_emitter",
+    name: "Shield Emitter",
+    shortName: "SHD",
+    description: "Rebuilds shields and stabilizes defensive bot patterns.",
+    color: 0x77ddbb,
+    icon: "E",
+    fabricationCost: { solar: 10, minerals: 10, scrap: 12 },
+  },
+  pulse_cannon: {
+    id: "pulse_cannon",
+    name: "Pulse Cannon",
+    shortName: "CAN",
+    description: "Provides autonomous ship fire and offensive merge potential.",
+    color: 0xff8d70,
+    icon: "P",
+    fabricationCost: { solar: 8, minerals: 14, scrap: 10 },
+  },
+  cargo_core: {
+    id: "cargo_core",
+    name: "Cargo Core",
+    shortName: "CAR",
+    description: "Boosts adjacent production and improves salvage returns.",
+    color: 0xd4b0ff,
+    icon: "C",
+    fabricationCost: { solar: 6, minerals: 8, scrap: 12 },
+  },
+  repair_node: {
+    id: "repair_node",
+    name: "Repair Node",
+    shortName: "REP",
+    description: "Repairs allied bots and hull, enabling calm recovery loops.",
+    color: 0xa6f0a2,
+    icon: "R",
+    fabricationCost: { solar: 10, minerals: 8, scrap: 12 },
+  },
+};
