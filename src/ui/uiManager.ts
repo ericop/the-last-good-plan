@@ -518,6 +518,8 @@ export class UIManager {
         } else {
           action = `<button class="ui-button primary full-width" data-action="merge-selected">Create Bot</button>`;
         }
+      } else if (preview.invalidReason === "needs_variety") {
+        action = `<button class="ui-button secondary full-width" disabled>Need 2+ Types</button>`;
       }
     }
 
@@ -658,7 +660,7 @@ export class UIManager {
             <div><span class="eyebrow">Scrap</span><strong>${state.summary.gains.scrap}</strong></div>
             <div><span class="eyebrow">Bots Lost</span><strong>${state.summary.losses.botsDestroyed}</strong></div>
           </div>
-          <p><strong>Discoveries:</strong> ${state.summary.discoveries.length > 0 ? state.summary.discoveries.join(", ") : "No new discoveries this mission."}</p>
+          <p><strong>Discoveries:</strong> ${state.summary.discoveries.length > 0 ? state.summary.discoveries.join(", ") : "No new bot discoveries or mastery this mission."}</p>
           <p><strong>Rewards:</strong> ${state.summary.rewards.length > 0 ? state.summary.rewards.join(", ") : "No artifacts recovered this mission."}</p>
           <p><strong>Perfect commitment bonus:</strong> +${state.summary.perfectCommitmentReward.solar} solar, +${state.summary.perfectCommitmentReward.scrap} scrap</p>
           <button class="ui-button primary" data-action="continue-results">Return To Planning</button>
@@ -672,7 +674,7 @@ export class UIManager {
           <h2>${state.summary.title}</h2>
           <p>${state.summary.text}</p>
           <p><strong>Gains:</strong> S ${state.summary.gains.solar}, M ${state.summary.gains.minerals}, C ${state.summary.gains.scrap}</p>
-          <p><strong>Discoveries:</strong> ${state.summary.discoveries.length > 0 ? state.summary.discoveries.join(", ") : "No new discoveries this final mission."}</p>
+          <p><strong>Discoveries:</strong> ${state.summary.discoveries.length > 0 ? state.summary.discoveries.join(", ") : "No new bot discoveries or mastery this final mission."}</p>
           <button class="ui-button primary" data-action="start-new-run">Start Fresh Run</button>
         </section>
       `);
@@ -793,6 +795,9 @@ export class UIManager {
     }
   }
 }
+
+
+
 
 
 

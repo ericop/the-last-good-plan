@@ -10,6 +10,7 @@ import {
   canAfford,
   getArtifactById,
   getBotCapacity,
+  getBotStagingPosition,
   getRecipeById,
   getSlotById,
   makeBotId,
@@ -28,6 +29,7 @@ function createBotFromRecipe(recipeId: string, index: number): BotInstance {
   if (!recipe) {
     throw new Error(`Missing recipe ${recipeId}`);
   }
+  const position = getBotStagingPosition(index);
   return {
     id: makeBotId(),
     recipeId: recipe.id,
@@ -37,8 +39,8 @@ function createBotFromRecipe(recipeId: string, index: number): BotInstance {
     tags: [...recipe.tags],
     hp: recipe.stats.hp,
     maxHp: recipe.stats.hp,
-    x: 350 + (index % 4) * 20,
-    y: 260 + Math.floor(index / 4) * 26,
+    x: position.x,
+    y: position.y,
     speed: recipe.stats.speed,
     mining: recipe.stats.mining,
     attack: recipe.stats.attack,
@@ -275,6 +277,10 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return state;
   }
 }
+
+
+
+
 
 
 

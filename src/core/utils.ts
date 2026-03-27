@@ -10,6 +10,7 @@ import type {
 } from "../types/gameTypes";
 import { ARTIFACT_DEFINITIONS } from "../data/artifacts";
 import { MERGE_RECIPES } from "../data/merges";
+import { BOARD_ORIGIN, SLOT_GAP, SLOT_SIZE } from "../game/constants";
 
 export function createEmptyPool(): ResourcePool {
   return { solar: 0, minerals: 0, scrap: 0 };
@@ -70,6 +71,20 @@ export function makeBotId(): string {
 
 export function makeEnemyId(): string {
   return `enemy_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+const BOT_STAGING_ANCHOR = {
+  x: BOARD_ORIGIN.x + 2 * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2,
+  y: BOARD_ORIGIN.y - 34,
+};
+
+export function getBotStagingPosition(index: number): { x: number; y: number } {
+  const column = index % 4;
+  const row = Math.floor(index / 4);
+  return {
+    x: BOT_STAGING_ANCHOR.x - 48 + column * 24,
+    y: BOT_STAGING_ANCHOR.y - row * 24,
+  };
 }
 
 export function addMessage(state: RunState, message: string): void {
@@ -198,3 +213,6 @@ export function areSlotsConnected(slots: ShipSlot[], slotIds: readonly string[])
 
   return visited.size === selected.size;
 }
+
+
+

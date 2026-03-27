@@ -52,6 +52,12 @@ export function getDiscoveryDescriptor(entry: DiscoveryEntry, recipe: MergeRecip
   return `${recipe.summary} ${recipe.masteryNote}`;
 }
 
+interface MergePreviewResult {
+  recipe?: MergeRecipe;
+  text: string;
+  invalidReason?: "needs_variety";
+}
+
 function getInvalidMergeText(modules: readonly ModuleId[]): string {
   if (modules.length < 2) {
     return "Select at least two placed modules to preview a merge.";
@@ -60,10 +66,10 @@ function getInvalidMergeText(modules: readonly ModuleId[]): string {
     return "Only 2-module and 3-module merges are supported.";
   }
   if (modules.length === 2 && modules[0] === modules[1]) {
-    return "A bot needs two different module types. This pair is too repetitive to stabilize.";
+    return "A bot needs 2+ module types. This pair is too repetitive to stabilize.";
   }
   if (modules.length === 3 && modules[0] === modules[1] && modules[1] === modules[2]) {
-    return "Three identical modules collapse into a dead chassis. Mix at least two module types.";
+    return "A bot needs 2+ module types. Three identical modules collapse into a dead chassis.";
   }
   return "No stable chassis pattern. This cluster does not produce a viable autonomous bot.";
 }
@@ -71,11 +77,13 @@ function getInvalidMergeText(modules: readonly ModuleId[]): string {
 export function getMergePreviewFromModules(
   modules: readonly ModuleId[],
   discovery: DiscoveryLog,
-): { recipe?: MergeRecipe; text: string } {
+): MergePreviewResult {
   const recipe = findRecipeByModules(modules);
   if (!recipe) {
+    const sameTypeSelection = modules.length >= 2 && new Set(modules).size === 1;
     return {
       text: getInvalidMergeText(modules),
+      invalidReason: sameTypeSelection ? "needs_variety" : undefined,
     };
   }
   const entry = ensureEntry(discovery, recipe.id);
@@ -96,3 +104,5 @@ export function getMergePreviewFromModules(
     text: `${recipe.resultName}: ${recipe.summary} ${recipe.masteryNote}`,
   };
 }
+
+

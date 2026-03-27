@@ -9,7 +9,7 @@ import type {
   SimulationState,
 } from "../types/gameTypes";
 import { createTutorialState } from "./tutorial";
-import { createEmptyPool } from "./utils";
+import { createEmptyPool, getBotStagingPosition } from "./utils";
 
 interface CreateRunStateOptions {
   forceTutorial?: boolean;
@@ -139,9 +139,10 @@ export function resetForNextCycle(state: RunState): void {
   state.ship.shield = state.ship.maxShield;
   state.ship.hull = Math.min(state.ship.maxHull, state.ship.hull + 18);
   state.ship.bots.forEach((bot, index) => {
+    const position = getBotStagingPosition(index);
     bot.hp = bot.maxHp;
-    bot.x = 340 + (index % 3) * 22;
-    bot.y = 270 + Math.floor(index / 3) * 22;
+    bot.x = position.x;
+    bot.y = position.y;
     bot.cooldown = 0;
     bot.contribution = { mined: 0, damage: 0, healing: 0, salvage: 0 };
   });
@@ -150,6 +151,8 @@ export function resetForNextCycle(state: RunState): void {
 }
 
 export function prepareExecutionState(state: RunState): void {
+  const preMissionDiscoveries = [...state.simulation.cycleStats.discoveries];
+
   state.phase = "execution";
   state.paused = false;
   state.summary = undefined;
@@ -163,17 +166,26 @@ export function prepareExecutionState(state: RunState): void {
   state.ship.shield = state.ship.maxShield;
   state.ship.bots = state.ship.bots.filter((bot) => bot.hp > 0);
   state.ship.bots.forEach((bot, index) => {
+    const position = getBotStagingPosition(index);
     bot.hp = Math.min(bot.maxHp, bot.hp + bot.maxHp * 0.35);
-    bot.x = 360 + (index % 4) * 22;
-    bot.y = 250 + Math.floor(index / 4) * 30;
+    bot.x = position.x;
+    bot.y = position.y;
     bot.cooldown = 0;
     bot.contribution = { mined: 0, damage: 0, healing: 0, salvage: 0 };
   });
   state.simulation = createSimulationState(state.cycle);
+  state.simulation.cycleStats.discoveries = preMissionDiscoveries;
   state.simulation.messageLog = [
     `Mission ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
   ];
 }
+
+
+
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createDefaultDiscoveryLog, getMergePreviewFromModules, noteRecipeSuccess, noteRecipeUse } from "./discovery";
 import { createThreatSchedule } from "../data/waves";
 import { findRecipeByModules } from "./utils";
@@ -21,6 +21,19 @@ describe("merge discovery logic", () => {
     noteRecipeSuccess(discovery, "survey_harrier");
     expect(discovery.survey_harrier.state).toBe("known_mastered_lite");
   });
+  it("flags identical selections as needing more than one module type", () => {
+    const discovery = createDefaultDiscoveryLog();
+    const pairPreview = getMergePreviewFromModules(["solar_collector", "solar_collector"], discovery);
+    const triplePreview = getMergePreviewFromModules(["cargo_core", "cargo_core", "cargo_core"], discovery);
+
+    expect(pairPreview.recipe).toBeUndefined();
+    expect(pairPreview.invalidReason).toBe("needs_variety");
+    expect(pairPreview.text).toContain("2+ module types");
+
+    expect(triplePreview.recipe).toBeUndefined();
+    expect(triplePreview.invalidReason).toBe("needs_variety");
+    expect(triplePreview.text).toContain("2+ module types");
+  });
 });
 
 describe("threat scheduling", () => {
@@ -31,3 +44,5 @@ describe("threat scheduling", () => {
     expect(schedule[3]).toMatchObject({ time: 36, kind: "mini_boss", count: 1 });
   });
 });
+
+

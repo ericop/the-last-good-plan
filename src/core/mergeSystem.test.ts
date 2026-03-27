@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MERGE_RECIPES } from "../data/merges";
-import { createRunState } from "./createRunState";
+import { createRunState, prepareExecutionState } from "./createRunState";
 import { createDefaultDiscoveryLog, getMergePreviewFromModules } from "./discovery";
 import { processCommand } from "./processCommand";
 import { findRecipeByModules } from "./utils";
@@ -152,6 +152,25 @@ describe("expanded merge system", () => {
     expect(state.discovery[recipe!.id].state).toBe("discovered");
   });
 
+
+  it("keeps pre-mission bot discoveries for the debrief", () => {
+    const saveData = createSaveData();
+    const state = createRunState(saveData, "planning");
+    const slotA = state.ship.slots.find((slot) => slot.id === "slot_0_0")!;
+    const slotB = state.ship.slots.find((slot) => slot.id === "slot_0_1")!;
+
+    slotA.moduleId = "solar_collector";
+    slotB.moduleId = "mineral_drill";
+    state.ui.selectedSlotIds = [slotA.id, slotB.id];
+
+    processCommand(state, { type: "merge_selected" }, saveData);
+    expect(state.simulation.cycleStats.discoveries).toContain("Survey Harrier");
+
+    prepareExecutionState(state);
+
+    expect(state.simulation.cycleStats.discoveries).toContain("Survey Harrier");
+  });
+
   it("does not consume modules when bot capacity is full", () => {
     const saveData = createSaveData();
     const state = createRunState(saveData, "planning");
@@ -194,4 +213,6 @@ describe("expanded merge system", () => {
     expect(slotB.moduleId).toBe("mineral_drill");
   });
 });
+
+
 
