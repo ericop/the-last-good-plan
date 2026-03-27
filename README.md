@@ -28,6 +28,7 @@ The Last Good Plan is a Phaser 3 + TypeScript + Vite MVP for a calm, single-scre
 
 - `npm run typecheck`
 - `npm run build`
+- `npm run test`
 - `npm run preview`
 
 ## Controls
