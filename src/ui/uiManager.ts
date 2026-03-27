@@ -408,7 +408,8 @@ export class UIManager {
               <button class="upgrade-card" data-action="spend-upgrade" data-upgrade="${upgrade.id}" ${disabled ? "disabled" : ""}>
                 <strong>${upgrade.name} Lv.${level}</strong>
                 <span>${upgrade.summary}</span>
-                <small>${nextCost ? `S ${nextCost.solar} � M ${nextCost.minerals} � C ${nextCost.scrap}` : "Maxed"}</small>
+                <small>Each level: ${upgrade.perLevelText}</small>
+                <small>${nextCost ? `Next: S ${nextCost.solar} | M ${nextCost.minerals} | C ${nextCost.scrap}` : "Maxed"}</small>
               </button>
             `;
           })
@@ -795,6 +796,8 @@ export class UIManager {
     }
   }
 }
+
+
 
 
 

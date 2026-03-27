@@ -207,7 +207,7 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       subtractFromPool(state.resources, cost);
       state.ship.upgrades[command.upgradeId] += 1;
       recalculateShipStats(state);
-      addMessage(state, `${definition.name} upgraded to tier ${state.ship.upgrades[command.upgradeId]}.`);
+      addMessage(state, `${definition.name} upgraded to tier ${state.ship.upgrades[command.upgradeId]}. ${definition.perLevelText}`);
       return state;
     }
     case "begin_execution": {
@@ -277,6 +277,7 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return state;
   }
 }
+
 
 
 

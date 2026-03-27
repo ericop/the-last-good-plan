@@ -61,6 +61,7 @@ export interface UpgradeDefinition {
   id: UpgradeId;
   name: string;
   summary: string;
+  perLevelText: string;
   costs: Cost[];
 }
 
@@ -304,6 +305,8 @@ export interface SaveData {
   meta: MetaProgress;
   onboarding: OnboardingProgress;
 }
+
+
 
 
 

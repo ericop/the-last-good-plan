@@ -486,6 +486,11 @@ button:disabled,
   font-size: 13px;
 }
 
+.mission-bar.running .mission-button.selected {
+  background: rgba(48, 86, 104, 0.96);
+  border-color: rgba(240, 207, 125, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(240, 207, 125, 0.18);
+}
 .mission-button.muted {
   background: linear-gradient(135deg, #39596a, #2a4352);
 }
@@ -682,6 +687,9 @@ button:disabled,
     padding: 9px 10px;
   }
 }
+
+
+
 
 
 
