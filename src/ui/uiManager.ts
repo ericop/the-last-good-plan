@@ -181,7 +181,7 @@ export class UIManager {
       <div class="hud-card wide">
         <span class="eyebrow">Cycle ${state.cycle}</span>
         <strong>${getPhaseLabel(state.phase)}</strong>
-        <span data-tutorial-target="mission-status">${DOCTRINES[state.doctrine].name} doctrine</span>
+        <span data-tutorial-target="mission-status">${DOCTRINES[state.doctrine].name}</span>
       </div>
       <div class="hud-card resource solar">
         <span class="eyebrow">Solar</span>
@@ -201,12 +201,12 @@ export class UIManager {
       <div class="hud-card">
         <span class="eyebrow">Commitment</span>
         <strong>+${Math.round(state.commitmentBonus * 100)}%</strong>
-        <span>bot efficiency</span>
+        <span>efficiency</span>
       </div>
       <div class="hud-card wide">
         <span class="eyebrow">Threat Preview</span>
         <strong>${nextThreatText}</strong>
-        <span>${state.simulation.upcomingThreats.map((wave) => wave.label).join(" • ")}</span>
+        <span>${Math.max(0, state.simulation.upcomingThreats.length - state.simulation.threatCursor)} waves queued</span>
       </div>
     `;
   }
@@ -696,5 +696,7 @@ export class UIManager {
     }
   }
 }
+
+
 
 

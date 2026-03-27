@@ -85,8 +85,8 @@ export function createRunState(
     commitmentBonus: 0.5,
     doctrineChangesThisCycle: 0,
     resources: {
-      solar: 72,
-      minerals: 72,
+      solar: 144,
+      minerals: 144,
       scrap: 72,
     },
     ship: {
@@ -170,3 +170,4 @@ export function prepareExecutionState(state: RunState): void {
     `Mission ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
   ];
 }
+

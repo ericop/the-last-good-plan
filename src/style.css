@@ -53,16 +53,17 @@ h3 {
 
 .app-shell {
   height: 100vh;
-  padding: 12px;
+  padding: 8px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 .hud-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(0, 0.7fr)) minmax(0, 1.5fr);
-  gap: 10px;
+  grid-template-columns: minmax(200px, 1.2fr) repeat(4, minmax(120px, 0.72fr)) minmax(260px, 1.55fr);
+  gap: 8px;
+  align-items: stretch;
 }
 
 .hud-card,
@@ -79,16 +80,19 @@ h3 {
 }
 
 .hud-card {
-  border-radius: 16px;
-  padding: 12px 14px;
+  border-radius: 12px;
+  padding: 5px 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  justify-content: center;
+  gap: 1px;
   min-width: 0;
+  min-height: 52px;
 }
 
 .hud-card strong {
-  font-size: 22px;
+  font-size: clamp(15px, 1.05vw, 18px);
+  line-height: 1.05;
 }
 
 .hud-card.resource.solar strong {
@@ -104,8 +108,8 @@ h3 {
 }
 
 .eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-size: 9px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-dim);
 }
@@ -113,21 +117,21 @@ h3 {
 .play-layout {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(280px, 330px) minmax(0, 1fr) minmax(320px, 360px);
-  gap: 12px;
+  grid-template-columns: minmax(220px, 270px) minmax(920px, 1.9fr) minmax(260px, 310px);
+  gap: 10px;
 }
 
 .dock-shell {
   min-width: 0;
   display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 8px;
   min-height: 0;
 }
 
 .dock-nav {
-  border-radius: 20px;
-  padding: 10px;
+  border-radius: 18px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -160,12 +164,13 @@ h3 {
 }
 
 .dock-button {
-  min-height: 56px;
+  min-height: 44px;
   text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 6px;
+  font-size: 13px;
 }
 
 .dock-button.selected,
@@ -223,8 +228,12 @@ button:disabled,
 .modal-card p,
 .tutorial-card p,
 .hud-card span {
-  line-height: 1.45;
+  line-height: 1.35;
   color: var(--text-soft);
+}
+
+.hud-card span {
+  font-size: 11px;
 }
 
 .emphasis-block {
@@ -290,19 +299,25 @@ button:disabled,
   min-height: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 12px;
+  justify-items: center;
+  gap: 10px;
 }
 
 .canvas-shell {
+  width: 100%;
+  max-width: 1440px;
   min-height: 0;
   border-radius: 24px;
-  padding: 10px;
+  padding: 12px;
   background: linear-gradient(180deg, rgba(13, 24, 34, 0.98), rgba(7, 15, 22, 0.98));
   display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #game-canvas {
-  width: 100%;
+  width: min(100%, 1400px);
+  aspect-ratio: 3 / 2;
   min-height: 0;
   display: flex;
   align-items: center;
@@ -310,8 +325,10 @@ button:disabled,
 }
 
 #game-canvas canvas {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
   border-radius: 16px;
 }
 
@@ -517,7 +534,7 @@ button:disabled,
 
 @media (max-width: 1480px) {
   .play-layout {
-    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(300px, 330px);
+    grid-template-columns: minmax(210px, 250px) minmax(0, 1fr) minmax(240px, 280px);
   }
 
   .hud-strip {
@@ -573,3 +590,4 @@ button:disabled,
     min-width: 0;
   }
 }
+

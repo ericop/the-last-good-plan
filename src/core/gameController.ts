@@ -54,8 +54,22 @@ export class GameController {
     const before = captureTutorialSnapshot(this.state);
     const important = stepSimulation(this.state, dt);
     updateTutorialAfterSimulation(this.state, before);
+
+    if (important) {
+      this.syncSaveData();
+      this.emit();
+      this.emitAccumulator = 0;
+      return;
+    }
+
+    const shouldStreamUi = this.state.phase === "execution" && !this.state.paused && !this.state.pendingReward;
+    if (!shouldStreamUi) {
+      this.emitAccumulator = 0;
+      return;
+    }
+
     this.emitAccumulator += dt;
-    if (important || this.emitAccumulator >= 0.12) {
+    if (this.emitAccumulator >= 0.12) {
       this.syncSaveData();
       this.emit();
       this.emitAccumulator = 0;
