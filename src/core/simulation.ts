@@ -1,4 +1,4 @@
-﻿import { DOCTRINES } from "../data/doctrines";
+import { DOCTRINES } from "../data/doctrines";
 import { ENEMY_DEFINITIONS } from "../data/enemies";
 import { MODULE_DEFINITIONS } from "../data/modules";
 import { OBJECTIVE_POINT, SHIP_CENTER, ENEMY_SPAWN_POINT } from "../game/constants";
@@ -342,11 +342,11 @@ function finalizeCycle(state: RunState): void {
 
   state.meta.totalCyclesCompleted += 1;
   state.summary = {
-    title: state.ship.hull > 0 ? `Cycle ${state.cycle} complete` : "The plan failed",
+    title: state.ship.hull > 0 ? `Mission ${state.cycle} complete` : "The plan failed",
     text:
       state.ship.hull > 0
-        ? "Your ship held together. Review the haul, discoveries, and what the doctrine actually bought you."
-        : "Hull collapse ended the run. The summary below should still tell you what almost worked.",
+        ? "Your ship held together. Review what the mission earned, what the doctrine bought you, and what to try next."
+        : "Hull collapse ended the run. The debrief below should still tell you what almost worked.",
     gains: roundPool(state.simulation.cycleStats.gained),
     losses: state.simulation.cycleStats.lost,
     discoveries: [...state.simulation.cycleStats.discoveries],
@@ -400,3 +400,4 @@ export function stepSimulation(state: RunState, dt: number): boolean {
 
   return majorUpdate;
 }
+

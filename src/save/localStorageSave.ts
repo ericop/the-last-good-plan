@@ -1,9 +1,10 @@
 ﻿import { createDefaultDiscoveryLog } from "../core/discovery";
 import type { SaveData } from "../types/gameTypes";
 
-const SAVE_KEY = "the-last-good-plan-save-v1";
+const SAVE_KEY = "the-last-good-plan-save-v2";
 
 export function loadSaveData(): SaveData {
+  const raw = localStorage.getItem(SAVE_KEY);
   const defaults: SaveData = {
     discovery: createDefaultDiscoveryLog(),
     meta: {
@@ -11,9 +12,11 @@ export function loadSaveData(): SaveData {
       totalPerfectCommitments: 0,
       totalArtifactsRecovered: 0,
     },
+    onboarding: {
+      tutorialCompleted: false,
+    },
   };
 
-  const raw = localStorage.getItem(SAVE_KEY);
   if (!raw) {
     return defaults;
   }
@@ -29,6 +32,9 @@ export function loadSaveData(): SaveData {
         ...defaults.meta,
         ...(parsed.meta ?? {}),
       },
+      onboarding: {
+        tutorialCompleted: parsed.onboarding?.tutorialCompleted ?? true,
+      },
     };
   } catch {
     return defaults;
@@ -37,4 +43,8 @@ export function loadSaveData(): SaveData {
 
 export function saveProgress(saveData: SaveData): void {
   localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+}
+
+export function clearSaveData(): void {
+  localStorage.removeItem(SAVE_KEY);
 }

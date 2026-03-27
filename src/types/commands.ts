@@ -1,4 +1,4 @@
-﻿import type { ArtifactDefinition, DoctrineId, ModuleId, UpgradeId } from "./gameTypes";
+﻿import type { ArtifactDefinition, DockPanelId, DoctrineId, ModuleId, UpgradeId } from "./gameTypes";
 
 export type GameCommand =
   | { type: "start_new_run" }
@@ -11,5 +11,9 @@ export type GameCommand =
   | { type: "begin_execution" }
   | { type: "continue_from_results" }
   | { type: "toggle_discovery_log" }
+  | { type: "set_dock_panel"; panelId: DockPanelId }
+  | { type: "advance_tutorial" }
+  | { type: "skip_tutorial" }
+  | { type: "replay_tutorial" }
   | { type: "choose_reward"; artifactId: ArtifactDefinition["id"] }
   | { type: "return_to_menu" };

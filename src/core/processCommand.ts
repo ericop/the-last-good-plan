@@ -1,9 +1,10 @@
-﻿import { MODULE_DEFINITIONS } from "../data/modules";
+import { MODULE_DEFINITIONS } from "../data/modules";
 import { UPGRADE_DEFINITIONS } from "../data/upgrades";
 import type { GameCommand } from "../types/commands";
 import type { BotInstance, RunState, SaveData } from "../types/gameTypes";
 import { createRunState, prepareExecutionState, resetForNextCycle } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
+import { getMissionReadiness, skipTutorial } from "./tutorial";
 import {
   addMessage,
   canAfford,
@@ -67,7 +68,7 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
     case "toggle_pause": {
       if (state.phase === "execution") {
         state.paused = !state.paused;
-        addMessage(state, state.paused ? "Cycle paused instantly." : "Cycle resumed.");
+        addMessage(state, state.paused ? "Mission paused instantly." : "Mission resumed.");
       }
       return state;
     }
@@ -86,7 +87,7 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
           )}%`,
         );
       } else {
-        addMessage(state, `Starting doctrine set to ${command.doctrineId.replace(/_/g, " ")}.`);
+        addMessage(state, `Mission doctrine set to ${command.doctrineId.replace(/_/g, " ")}.`);
       }
       return state;
     }
@@ -115,7 +116,8 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
         }
         subtractFromPool(state.resources, cost);
         slot.moduleId = selectedModuleId;
-        addMessage(state, `${MODULE_DEFINITIONS[selectedModuleId].name} fabricated into ${slot.label}.`);
+        state.missionPrep.modulesPlacedThisMission += 1;
+        addMessage(state, `${MODULE_DEFINITIONS[selectedModuleId].name} placed in ${slot.label}.`);
         return state;
       }
 
@@ -142,7 +144,7 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
         return state;
       }
       if (!isAdjacent(state.ship.slots, slotAId, slotBId)) {
-        addMessage(state, "Modules must be in adjacent slots to merge.");
+        addMessage(state, "Modules must be in adjacent slots to create a bot.");
         return state;
       }
       if (state.ship.bots.length >= getBotCapacity(state)) {
@@ -192,9 +194,9 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       if (state.phase !== "planning") {
         return state;
       }
-      const hasSystems = state.ship.slots.some((slot) => slot.moduleId) || state.ship.bots.length > 0;
-      if (!hasSystems) {
-        addMessage(state, "Install or merge at least one active system before running the cycle.");
+      const readiness = getMissionReadiness(state);
+      if (!readiness.ready) {
+        addMessage(state, readiness.reason);
         return state;
       }
       prepareExecutionState(state);
@@ -202,7 +204,24 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
     }
     case "toggle_discovery_log": {
       state.ui.showDiscoveryLog = !state.ui.showDiscoveryLog;
+      state.ui.activeDockPanel = state.ui.showDiscoveryLog ? "log" : "ship";
       return state;
+    }
+    case "set_dock_panel": {
+      state.ui.activeDockPanel = command.panelId;
+      state.ui.showDiscoveryLog = command.panelId === "log";
+      return state;
+    }
+    case "advance_tutorial": {
+      return state;
+    }
+    case "skip_tutorial": {
+      skipTutorial(state);
+      state.ui.activeDockPanel = "ship";
+      return state;
+    }
+    case "replay_tutorial": {
+      return createRunState(saveData, "planning", { forceTutorial: true });
     }
     case "choose_reward": {
       if (!state.pendingReward) {
@@ -238,4 +257,3 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return state;
   }
 }
-
