@@ -1,8 +1,9 @@
-﻿import type { ArtifactDefinition, DockPanelId, DoctrineId, ModuleId, UpgradeId } from "./gameTypes";
+import type { ArtifactDefinition, DockPanelId, DoctrineId, ModuleId, UpgradeId } from "./gameTypes";
 
 export type GameCommand =
   | { type: "start_new_run" }
   | { type: "toggle_pause" }
+  | { type: "toggle_execution_speed" }
   | { type: "set_doctrine"; doctrineId: DoctrineId }
   | { type: "select_fabrication_module"; moduleId?: ModuleId }
   | { type: "board_slot_pressed"; slotId: string }

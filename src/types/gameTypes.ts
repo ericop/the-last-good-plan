@@ -14,7 +14,7 @@ export type BotRole = "mining" | "defense" | "support" | "hybrid";
 export type ArtifactType = "passive" | "doctrine" | "merge_support";
 export type RewardSource = "moon" | "boss";
 export type EnemyKind = "scavenger" | "mini_boss";
-export type DockPanelId = "ship" | "log" | "bots" | "upgrades" | "settings";
+export type DockPanelId = "ship" | "build" | "bots" | "doctrine" | "log" | "upgrades" | "settings";
 export type TutorialStepId =
   | "intro"
   | "place_solar_collector"
@@ -282,6 +282,7 @@ export interface RunState {
   phase: Phase;
   cycle: number;
   paused: boolean;
+  executionSpeed: 1 | 2;
   doctrine: DoctrineId;
   commitmentBonus: number;
   doctrineChangesThisCycle: number;
@@ -303,6 +304,8 @@ export interface SaveData {
   meta: MetaProgress;
   onboarding: OnboardingProgress;
 }
+
+
 
 
 

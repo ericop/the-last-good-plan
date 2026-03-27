@@ -83,6 +83,13 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       }
       return state;
     }
+    case "toggle_execution_speed": {
+      if (state.phase === "execution") {
+        state.executionSpeed = state.executionSpeed === 1 ? 2 : 1;
+        addMessage(state, `Mission speed set to ${state.executionSpeed}x.`);
+      }
+      return state;
+    }
     case "set_doctrine": {
       if (state.doctrine === command.doctrineId) {
         return state;
@@ -215,7 +222,7 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
     }
     case "toggle_discovery_log": {
       state.ui.showDiscoveryLog = !state.ui.showDiscoveryLog;
-      state.ui.activeDockPanel = state.ui.showDiscoveryLog ? "log" : "ship";
+      state.ui.activeDockPanel = state.ui.showDiscoveryLog ? "log" : state.phase === "planning" ? "build" : "ship";
       return state;
     }
     case "set_dock_panel": {
@@ -228,7 +235,7 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
     }
     case "skip_tutorial": {
       skipTutorial(state);
-      state.ui.activeDockPanel = "ship";
+      state.ui.activeDockPanel = state.phase === "planning" ? "build" : "ship";
       return state;
     }
     case "replay_tutorial": {
@@ -268,6 +275,8 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return state;
   }
 }
+
+
 
 
 

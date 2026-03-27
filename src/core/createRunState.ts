@@ -81,6 +81,7 @@ export function createRunState(
     phase,
     cycle: 1,
     paused: false,
+    executionSpeed: 1,
     doctrine: "balanced",
     commitmentBonus: 0.5,
     doctrineChangesThisCycle: 0,
@@ -111,7 +112,7 @@ export function createRunState(
       selectedFabricationModuleId: undefined,
       selectedSlotIds: [],
       showDiscoveryLog: false,
-      activeDockPanel: "ship",
+      activeDockPanel: "build",
     },
     discovery,
     meta: { ...saveData.meta },
@@ -131,9 +132,10 @@ export function resetForNextCycle(state: RunState): void {
   state.doctrineChangesThisCycle = 0;
   state.pendingReward = undefined;
   state.summary = undefined;
+  state.executionSpeed = 1;
   state.ui.selectedSlotIds = [];
   state.ui.selectedFabricationModuleId = undefined;
-  state.ui.activeDockPanel = "ship";
+  state.ui.activeDockPanel = "build";
   state.ship.shield = state.ship.maxShield;
   state.ship.hull = Math.min(state.ship.maxHull, state.ship.hull + 18);
   state.ship.bots.forEach((bot, index) => {
@@ -152,10 +154,12 @@ export function prepareExecutionState(state: RunState): void {
   state.paused = false;
   state.summary = undefined;
   state.pendingReward = undefined;
+  state.executionSpeed = 1;
   state.commitmentBonus = 0.5;
   state.doctrineChangesThisCycle = 0;
   state.ui.selectedSlotIds = [];
   state.ui.selectedFabricationModuleId = undefined;
+  state.ui.activeDockPanel = "ship";
   state.ship.shield = state.ship.maxShield;
   state.ship.bots = state.ship.bots.filter((bot) => bot.hp > 0);
   state.ship.bots.forEach((bot, index) => {
@@ -170,6 +174,9 @@ export function prepareExecutionState(state: RunState): void {
     `Mission ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
   ];
 }
+
+
+
 
 
 

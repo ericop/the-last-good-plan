@@ -10,8 +10,10 @@ import type { DockPanelId, ModuleId, RunState, UpgradeId } from "../types/gameTy
 
 const DOCK_ITEMS: Array<{ id: DockPanelId; label: string }> = [
   { id: "ship", label: "Ship" },
-  { id: "log", label: "Log" },
+  { id: "build", label: "Build" },
   { id: "bots", label: "Bots" },
+  { id: "doctrine", label: "Doctrine" },
+  { id: "log", label: "Log" },
   { id: "upgrades", label: "Upgrades" },
   { id: "settings", label: "Settings" },
 ];
@@ -24,10 +26,14 @@ export class UIManager {
   private hudStrip: HTMLElement;
   private dockNav: HTMLElement;
   private dockPanel: HTMLElement;
-  private coreRail: HTMLElement;
   private missionBar: HTMLElement;
   private modalLayer: HTMLElement;
   private highlightedTargets = new Set<HTMLElement>();
+  private lastHudHtml = "";
+  private lastDockNavHtml = "";
+  private lastDockPanelHtml = "";
+  private lastMissionBarHtml = "";
+  private lastModalHtml = "";
 
   constructor(private root: HTMLElement, private controller: GameController) {
     root.innerHTML = `
@@ -44,7 +50,6 @@ export class UIManager {
             </div>
             <div class="mission-bar-wrap" id="mission-bar"></div>
           </main>
-          <aside class="core-rail" id="core-rail"></aside>
         </div>
         <div class="modal-layer" id="modal-layer"></div>
       </div>
@@ -53,17 +58,15 @@ export class UIManager {
     const hudStrip = root.querySelector<HTMLElement>("#hud-strip");
     const dockNav = root.querySelector<HTMLElement>("#dock-nav");
     const dockPanel = root.querySelector<HTMLElement>("#dock-panel");
-    const coreRail = root.querySelector<HTMLElement>("#core-rail");
     const missionBar = root.querySelector<HTMLElement>("#mission-bar");
     const modalLayer = root.querySelector<HTMLElement>("#modal-layer");
-    if (!hudStrip || !dockNav || !dockPanel || !coreRail || !missionBar || !modalLayer) {
+    if (!hudStrip || !dockNav || !dockPanel || !missionBar || !modalLayer) {
       throw new Error("UI shell failed to initialize.");
     }
 
     this.hudStrip = hudStrip;
     this.dockNav = dockNav;
     this.dockPanel = dockPanel;
-    this.coreRail = coreRail;
     this.missionBar = missionBar;
     this.modalLayer = modalLayer;
 
@@ -109,6 +112,9 @@ export class UIManager {
       case "toggle-pause":
         this.controller.dispatch({ type: "toggle_pause" });
         break;
+      case "toggle-fast-forward":
+        this.controller.dispatch({ type: "toggle_execution_speed" });
+        break;
       case "choose-reward":
         this.controller.dispatch({
           type: "choose_reward",
@@ -146,13 +152,33 @@ export class UIManager {
 
   private render(state: RunState): void {
     this.root.classList.toggle("menu-mode", state.phase === "menu");
-    this.hudStrip.innerHTML = this.renderHud(state);
-    this.dockNav.innerHTML = state.phase === "menu" ? "" : this.renderDockNav(state);
-    this.dockPanel.innerHTML = state.phase === "menu" ? "" : this.renderDockPanel(state);
-    this.coreRail.innerHTML = state.phase === "menu" ? "" : this.renderCoreRail(state);
-    this.missionBar.innerHTML = state.phase === "menu" ? "" : this.renderMissionBar(state);
-    this.modalLayer.innerHTML = this.renderModals(state);
+    this.setSectionHtml("hud", this.hudStrip, this.renderHud(state));
+    this.setSectionHtml("dockNav", this.dockNav, state.phase === "menu" ? "" : this.renderDockNav(state));
+    this.setSectionHtml("dockPanel", this.dockPanel, state.phase === "menu" ? "" : this.renderDockPanel(state));
+    this.setSectionHtml("missionBar", this.missionBar, state.phase === "menu" ? "" : this.renderMissionBar(state));
+    this.setSectionHtml("modal", this.modalLayer, this.renderModals(state));
     this.syncTutorialHighlights(state);
+  }
+
+  private setSectionHtml(
+    section: "hud" | "dockNav" | "dockPanel" | "missionBar" | "modal",
+    element: HTMLElement,
+    html: string,
+  ): void {
+    const key = {
+      hud: "lastHudHtml",
+      dockNav: "lastDockNavHtml",
+      dockPanel: "lastDockPanelHtml",
+      missionBar: "lastMissionBarHtml",
+      modal: "lastModalHtml",
+    }[section] as "lastHudHtml" | "lastDockNavHtml" | "lastDockPanelHtml" | "lastMissionBarHtml" | "lastModalHtml";
+
+    if (this[key] === html) {
+      return;
+    }
+
+    this[key] = html;
+    element.innerHTML = html;
   }
 
   private renderHud(state: RunState): string {
@@ -229,10 +255,14 @@ export class UIManager {
 
   private renderDockPanel(state: RunState): string {
     switch (this.getVisibleDockPanel(state)) {
+      case "build":
+        return this.renderBuildPanel(state);
       case "log":
         return this.renderLogPanel(state);
       case "bots":
         return this.renderBotsPanel(state);
+      case "doctrine":
+        return this.renderDoctrinePanel(state);
       case "upgrades":
         return this.renderUpgradePanel(state);
       case "settings":
@@ -250,7 +280,7 @@ export class UIManager {
       .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot));
     const selectedText =
       selectedSlots.length > 0
-        ? selectedSlots.map((slot) => `${slot.label}${slot.moduleId ? ` • ${MODULE_DEFINITIONS[slot.moduleId].name}` : ""}`).join("<br>")
+        ? selectedSlots.map((slot) => `${slot.label}${slot.moduleId ? ` ï¿½ ${MODULE_DEFINITIONS[slot.moduleId].name}` : ""}`).join("<br>")
         : "Nothing selected yet";
 
     return `
@@ -274,6 +304,16 @@ export class UIManager {
         <div class="message-list">
           ${state.simulation.messageLog.slice(-5).map((entry) => `<div class="message-entry">${entry}</div>`).join("")}
         </div>
+      </div>
+    `;
+  }
+
+  private renderBuildPanel(state: RunState): string {
+    return `
+      ${this.renderModulePanel(state)}
+      <div class="panel-block">
+        <span class="eyebrow">Build Flow</span>
+        <p>Pick a module, then place it on any open ship slot. Fabrication only runs during planning.</p>
       </div>
     `;
   }
@@ -303,6 +343,9 @@ export class UIManager {
   }
 
   private renderBotsPanel(state: RunState): string {
+    const selectedSlots = state.ui.selectedSlotIds
+      .map((slotId) => getSlotById(state.ship.slots, slotId))
+      .filter((slot): slot is NonNullable<ReturnType<typeof getSlotById>> => Boolean(slot));
     const botCards =
       state.ship.bots.length > 0
         ? state.ship.bots
@@ -311,12 +354,12 @@ export class UIManager {
                 <article class="bot-card">
                   <strong>${bot.name}</strong>
                   <span>${bot.role} bot</span>
-                  <small>HP ${Math.round(bot.hp)}/${bot.maxHp} • Mine ${Math.round(bot.contribution.mined)} • Damage ${Math.round(bot.contribution.damage)}</small>
+                  <small>HP ${Math.round(bot.hp)}/${bot.maxHp} ï¿½ Mine ${Math.round(bot.contribution.mined)} ï¿½ Damage ${Math.round(bot.contribution.damage)}</small>
                 </article>
               `,
             )
             .join("")
-        : `<div class="empty-state">Create a bot from connected modules to see it here.</div>`;
+        : `<div class="empty-state">Create a bot from any valid pair or trio to see it here.</div>`;
 
     const artifacts =
       state.ship.artifacts.length > 0
@@ -335,6 +378,7 @@ export class UIManager {
         : `<div class="empty-state">No artifacts installed yet.</div>`;
 
     return `
+      ${state.phase === "planning" ? this.renderMergePanel(state, selectedSlots) : ""}
       <div class="panel-block">
         <span class="eyebrow">Fleet</span>
         <strong>${state.ship.bots.length}/${getBotCapacity(state)} bots ready</strong>
@@ -364,7 +408,7 @@ export class UIManager {
               <button class="upgrade-card" data-action="spend-upgrade" data-upgrade="${upgrade.id}" ${disabled ? "disabled" : ""}>
                 <strong>${upgrade.name} Lv.${level}</strong>
                 <span>${upgrade.summary}</span>
-                <small>${nextCost ? `S ${nextCost.solar} • M ${nextCost.minerals} • C ${nextCost.scrap}` : "Maxed"}</small>
+                <small>${nextCost ? `S ${nextCost.solar} ï¿½ M ${nextCost.minerals} ï¿½ C ${nextCost.scrap}` : "Maxed"}</small>
               </button>
             `;
           })
@@ -382,7 +426,7 @@ export class UIManager {
       </div>
       <div class="button-stack">
         ${state.tutorial.active ? `<button class="ui-button secondary" data-action="skip-tutorial">Skip Tutorial</button>` : `<button class="ui-button secondary" data-action="replay-tutorial">Replay Tutorial</button>`}
-        ${state.phase === "execution" ? `<button class="ui-button secondary" data-action="toggle-pause">${state.paused ? "Resume Mission" : "Pause Mission"}</button>` : ""}
+        ${state.phase === "execution" ? `<div class="button-stack"><button class="ui-button secondary ${state.executionSpeed === 2 ? "selected" : ""}" data-action="toggle-fast-forward">2x FastForward</button><button class="ui-button secondary" data-action="toggle-pause">${state.paused ? "Resume Mission" : "Pause Mission"}</button></div>` : ""}
         ${state.tutorial.active ? "" : `<button class="ui-button secondary" data-action="return-menu">Return To Menu</button>`}
       </div>
     `;
@@ -427,6 +471,7 @@ export class UIManager {
           ${Object.values(MODULE_DEFINITIONS)
             .map((module) => {
               const selected = state.ui.selectedFabricationModuleId === module.id;
+              const disabled = state.phase !== "planning";
               const costParts = [
                 `S ${module.fabricationCost.solar}`,
                 `M ${module.fabricationCost.minerals}`,
@@ -435,10 +480,10 @@ export class UIManager {
                 costParts.push(`C ${module.fabricationCost.scrap}`);
               }
               return `
-                <button class="module-card ${selected ? "selected" : ""}" data-action="fabricate" data-module="${module.id}" data-tutorial-target="module-${module.id}">
+                <button class="module-card ${selected ? "selected" : ""}" data-action="fabricate" data-module="${module.id}" data-tutorial-target="module-${module.id}" ${disabled ? "disabled" : ""}>
                   <strong>${module.name}</strong>
                   <span>${module.description}</span>
-                  <small>${costParts.join(" • ")}</small>
+                  <small>${costParts.join(" ï¿½ ")}</small>
                 </button>
               `;
             })
@@ -533,11 +578,16 @@ export class UIManager {
           <div class="mission-copy">
             <span class="eyebrow">Mission Status</span>
             <strong>Mission Running</strong>
-            <span class="mission-hint">Your ship is acting automatically. Pause is instant if you want time to think.</span>
+            <span class="mission-hint">Your ship is acting automatically at ${state.executionSpeed}x speed. Pause is instant if you want time to think.</span>
           </div>
-          <button class="mission-button muted" data-action="toggle-pause">
-            ${state.paused ? "Resume Mission" : "Pause Mission"}
-          </button>
+          <div class="mission-controls">
+            <button class="mission-button ${state.executionSpeed === 2 ? "selected" : "muted"}" data-action="toggle-fast-forward">
+              2x FastForward
+            </button>
+            <button class="mission-button muted" data-action="toggle-pause">
+              ${state.paused ? "Resume Mission" : "Pause Mission"}
+            </button>
+          </div>
         </div>
       `;
     }
@@ -672,17 +722,47 @@ export class UIManager {
 
   private getVisibleDockPanel(state: RunState): DockPanelId {
     const requested = state.ui.activeDockPanel;
+    if (requested === "settings" && !this.isDockPanelLocked(state, requested)) {
+      return requested;
+    }
+
+    const tutorialPanel = this.getTutorialDockPanel(state);
+    if (tutorialPanel) {
+      return tutorialPanel;
+    }
     if (this.isDockPanelLocked(state, requested)) {
-      return "ship";
+      return state.phase === "planning" ? "build" : "ship";
     }
     return requested;
+  }
+
+  private getTutorialDockPanel(state: RunState): DockPanelId | undefined {
+    if (!state.tutorial.active) {
+      return undefined;
+    }
+
+    switch (state.tutorial.stepId) {
+      case "place_solar_collector":
+      case "place_mineral_drill":
+      case "place_third_module":
+        return "build";
+      case "merge_bot":
+      case "bots_explain":
+        return "bots";
+      case "select_doctrine":
+        return "doctrine";
+      default:
+        return "ship";
+    }
   }
 
   private isDockPanelLocked(state: RunState, panelId: DockPanelId): boolean {
     if (!state.tutorial.active) {
       return false;
     }
-    return panelId === "log" || panelId === "bots" || panelId === "upgrades";
+
+    const tutorialPanel = this.getTutorialDockPanel(state);
+    return panelId !== "settings" && panelId !== tutorialPanel;
   }
 
   private getGeneralGuidanceTitle(state: RunState): string {
@@ -713,6 +793,12 @@ export class UIManager {
     }
   }
 }
+
+
+
+
+
+
 
 
 

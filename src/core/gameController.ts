@@ -52,7 +52,8 @@ export class GameController {
 
   update(dt: number): void {
     const before = captureTutorialSnapshot(this.state);
-    const important = stepSimulation(this.state, dt);
+    const steppedDt = this.state.phase === "execution" ? dt * this.state.executionSpeed : dt;
+    const important = stepSimulation(this.state, steppedDt);
     updateTutorialAfterSimulation(this.state, before);
 
     if (important) {
@@ -89,3 +90,4 @@ export class GameController {
     }
   }
 }
+

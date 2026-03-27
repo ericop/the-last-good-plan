@@ -117,7 +117,7 @@ h3 {
 .play-layout {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(220px, 270px) minmax(920px, 1.9fr) minmax(260px, 310px);
+  grid-template-columns: minmax(400px, 480px) minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -175,7 +175,8 @@ h3 {
 
 .dock-button.selected,
 .ui-button.selected,
-.module-card.selected {
+.module-card.selected,
+.mission-button.selected {
   background: rgba(48, 86, 104, 0.96);
   border-color: rgba(240, 207, 125, 0.72);
 }
@@ -305,7 +306,7 @@ button:disabled,
 
 .canvas-shell {
   width: 100%;
-  max-width: 1320px;
+  max-width: 1260px;
   max-height: calc(100vh - 220px);
   min-height: 0;
   border-radius: 24px;
@@ -318,7 +319,7 @@ button:disabled,
 }
 
 #game-canvas {
-  width: min(90%, 1240px);
+  width: min(86%, 1180px);
   aspect-ratio: 3 / 2;
   max-height: calc(100vh - 244px);
   min-height: 0;
@@ -430,6 +431,17 @@ button:disabled,
 
 .mission-copy strong {
   font-size: 24px;
+}
+.mission-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mission-controls .mission-button {
+  min-width: 180px;
 }
 
 .mission-hint {
@@ -560,7 +572,7 @@ button:disabled,
 
 @media (max-width: 1480px) {
   .play-layout {
-    grid-template-columns: minmax(210px, 250px) minmax(0, 1fr) minmax(240px, 280px);
+    grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
   }
 
   .hud-strip {
@@ -621,6 +633,9 @@ button:disabled,
     max-height: calc(100vh - 32px);
   }
 }
+
+
+
 
 
 
