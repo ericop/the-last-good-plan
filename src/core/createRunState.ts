@@ -1,4 +1,4 @@
-﻿import { BOARD_ORIGIN, SLOT_GAP, SLOT_SIZE } from "../game/constants";
+import { BOARD_ORIGIN, SLOT_GAP, SLOT_SIZE } from "../game/constants";
 import { createThreatSchedule } from "../data/waves";
 import type {
   BotInstance,
@@ -8,7 +8,12 @@ import type {
   ShipSlot,
   SimulationState,
 } from "../types/gameTypes";
+import { createTutorialState } from "./tutorial";
 import { createEmptyPool } from "./utils";
+
+interface CreateRunStateOptions {
+  forceTutorial?: boolean;
+}
 
 function createSlots(): ShipSlot[] {
   const slots: ShipSlot[] = [];
@@ -49,7 +54,7 @@ function createSimulationState(cycle: number): SimulationState {
     bossDefeated: false,
     moonRewardTriggered: false,
     perfectCommitmentRewardGranted: false,
-    messageLog: ["Planning phase. Fabricate modules, merge adjacent systems, then begin the cycle."],
+    messageLog: ["Planning phase. Place modules, create a bot, then start the mission."],
     cycleStats: {
       gained: createEmptyPool(),
       lost: {
@@ -66,7 +71,11 @@ function createStarterBots(): BotInstance[] {
   return [];
 }
 
-export function createRunState(saveData: SaveData, phase: RunState["phase"] = "planning"): RunState {
+export function createRunState(
+  saveData: SaveData,
+  phase: RunState["phase"] = "planning",
+  options: CreateRunStateOptions = {},
+): RunState {
   const discovery: DiscoveryLog = JSON.parse(JSON.stringify(saveData.discovery));
   return {
     phase,
@@ -76,8 +85,8 @@ export function createRunState(saveData: SaveData, phase: RunState["phase"] = "p
     commitmentBonus: 0.5,
     doctrineChangesThisCycle: 0,
     resources: {
-      solar: 72,
-      minerals: 72,
+      solar: 144,
+      minerals: 144,
       scrap: 72,
     },
     ship: {
@@ -102,9 +111,15 @@ export function createRunState(saveData: SaveData, phase: RunState["phase"] = "p
       selectedFabricationModuleId: undefined,
       selectedSlotIds: [],
       showDiscoveryLog: false,
+      activeDockPanel: "ship",
     },
     discovery,
     meta: { ...saveData.meta },
+    onboarding: { ...saveData.onboarding },
+    tutorial: createTutorialState(saveData, options.forceTutorial),
+    missionPrep: {
+      modulesPlacedThisMission: 0,
+    },
   };
 }
 
@@ -118,6 +133,7 @@ export function resetForNextCycle(state: RunState): void {
   state.summary = undefined;
   state.ui.selectedSlotIds = [];
   state.ui.selectedFabricationModuleId = undefined;
+  state.ui.activeDockPanel = "ship";
   state.ship.shield = state.ship.maxShield;
   state.ship.hull = Math.min(state.ship.maxHull, state.ship.hull + 18);
   state.ship.bots.forEach((bot, index) => {
@@ -127,6 +143,7 @@ export function resetForNextCycle(state: RunState): void {
     bot.cooldown = 0;
     bot.contribution = { mined: 0, damage: 0, healing: 0, salvage: 0 };
   });
+  state.missionPrep.modulesPlacedThisMission = 0;
   state.simulation = createSimulationState(state.cycle);
 }
 
@@ -150,6 +167,7 @@ export function prepareExecutionState(state: RunState): void {
   });
   state.simulation = createSimulationState(state.cycle);
   state.simulation.messageLog = [
-    `Cycle ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
+    `Mission ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
   ];
 }
+

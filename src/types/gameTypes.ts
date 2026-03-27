@@ -14,6 +14,18 @@ export type BotRole = "mining" | "defense" | "support" | "hybrid";
 export type ArtifactType = "passive" | "doctrine" | "merge_support";
 export type RewardSource = "moon" | "boss";
 export type EnemyKind = "scavenger" | "mini_boss";
+export type DockPanelId = "ship" | "log" | "bots" | "upgrades" | "settings";
+export type TutorialStepId =
+  | "intro"
+  | "place_solar_collector"
+  | "place_mineral_drill"
+  | "place_third_module"
+  | "merge_bot"
+  | "bots_explain"
+  | "select_doctrine"
+  | "start_mission"
+  | "mission_running"
+  | "mission_results";
 
 export interface ResourcePool {
   solar: number;
@@ -189,6 +201,10 @@ export interface MetaProgress {
   totalArtifactsRecovered: number;
 }
 
+export interface OnboardingProgress {
+  tutorialCompleted: boolean;
+}
+
 export interface RewardOffer {
   source: RewardSource;
   choices: string[];
@@ -207,10 +223,21 @@ export interface CycleSummary {
   perfectCommitmentReward: ResourcePool;
 }
 
+export interface TutorialState {
+  active: boolean;
+  firstRun: boolean;
+  stepId: TutorialStepId;
+}
+
 export interface UiState {
   selectedFabricationModuleId?: ModuleId;
   selectedSlotIds: string[];
   showDiscoveryLog: boolean;
+  activeDockPanel: DockPanelId;
+}
+
+export interface MissionPrepState {
+  modulesPlacedThisMission: number;
 }
 
 export interface CycleStats {
@@ -264,9 +291,13 @@ export interface RunState {
   ui: UiState;
   discovery: DiscoveryLog;
   meta: MetaProgress;
+  onboarding: OnboardingProgress;
+  tutorial: TutorialState;
+  missionPrep: MissionPrepState;
 }
 
 export interface SaveData {
   discovery: DiscoveryLog;
   meta: MetaProgress;
+  onboarding: OnboardingProgress;
 }
