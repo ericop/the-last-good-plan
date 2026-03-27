@@ -102,7 +102,7 @@ export function createRunState(
         support_bay: 0,
       },
       artifacts: [],
-      botCapacityBase: 3,
+      botCapacityBase: 4,
     },
     simulation: createSimulationState(1),
     summary: undefined,
@@ -170,5 +170,6 @@ export function prepareExecutionState(state: RunState): void {
     `Mission ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
   ];
 }
+
 
 

@@ -124,4 +124,19 @@ describe("tutorial onboarding flow", () => {
     expect(state.phase).toBe("execution");
     expect(state.tutorial.stepId).toBe("mission_running");
   });
+
+  it("allows filling the whole ship with modules even with zero scrap", () => {
+    const saveData = createSaveData(true);
+    const state = createRunState(saveData, "planning");
+    state.resources.scrap = 0;
+
+    processCommand(state, { type: "select_fabrication_module", moduleId: "solar_collector" }, saveData);
+    state.ship.slots.forEach((slot) => {
+      processCommand(state, { type: "board_slot_pressed", slotId: slot.id }, saveData);
+    });
+
+    expect(state.ship.slots.every((slot) => slot.moduleId === "solar_collector")).toBe(true);
+    expect(state.resources.scrap).toBe(0);
+  });
 });
+

@@ -127,4 +127,71 @@ describe("expanded merge system", () => {
     expect(slotC.moduleId).toBeUndefined();
     expect(state.discovery[recipe!.id].state).toBe("discovered");
   });
+  it("creates a bot from a disconnected valid triple merge", () => {
+    const saveData = createSaveData();
+    const state = createRunState(saveData, "planning");
+    const slotA = state.ship.slots.find((slot) => slot.id === "slot_0_0")!;
+    const slotB = state.ship.slots.find((slot) => slot.id === "slot_1_1")!;
+    const slotC = state.ship.slots.find((slot) => slot.id === "slot_2_2")!;
+
+    slotA.moduleId = "pulse_cannon";
+    slotB.moduleId = "mineral_drill";
+    slotC.moduleId = "solar_collector";
+    state.ui.selectedSlotIds = [slotA.id, slotB.id, slotC.id];
+
+    const recipe = findRecipeByModules([slotA.moduleId, slotB.moduleId, slotC.moduleId]);
+    expect(recipe).toBeDefined();
+
+    processCommand(state, { type: "merge_selected" }, saveData);
+
+    expect(state.ship.bots).toHaveLength(1);
+    expect(state.ship.bots[0].recipeId).toBe(recipe!.id);
+    expect(slotA.moduleId).toBeUndefined();
+    expect(slotB.moduleId).toBeUndefined();
+    expect(slotC.moduleId).toBeUndefined();
+    expect(state.discovery[recipe!.id].state).toBe("discovered");
+  });
+
+  it("does not consume modules when bot capacity is full", () => {
+    const saveData = createSaveData();
+    const state = createRunState(saveData, "planning");
+    const slotA = state.ship.slots.find((slot) => slot.id === "slot_0_0")!;
+    const slotB = state.ship.slots.find((slot) => slot.id === "slot_0_1")!;
+
+    slotA.moduleId = "solar_collector";
+    slotB.moduleId = "mineral_drill";
+    state.ui.selectedSlotIds = [slotA.id, slotB.id];
+    state.ship.bots = Array.from({ length: state.ship.botCapacityBase }, (_, index) => ({
+      id: `bot_${index}`,
+      recipeId: "survey_harrier",
+      name: "Survey Harrier",
+      role: "mining" as const,
+      color: 0xffffff,
+      tags: ["solar", "mining"],
+      hp: 20,
+      maxHp: 20,
+      x: 0,
+      y: 0,
+      speed: 1,
+      mining: 1,
+      attack: 1,
+      support: 0,
+      range: 1,
+      salvage: 0,
+      cooldown: 0,
+      contribution: {
+        mined: 0,
+        damage: 0,
+        healing: 0,
+        salvage: 0,
+      },
+    }));
+
+    processCommand(state, { type: "merge_selected" }, saveData);
+
+    expect(state.ship.bots).toHaveLength(state.ship.botCapacityBase);
+    expect(slotA.moduleId).toBe("solar_collector");
+    expect(slotB.moduleId).toBe("mineral_drill");
+  });
 });
+

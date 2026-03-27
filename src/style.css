@@ -499,9 +499,11 @@ button:disabled,
 .tutorial-card {
   position: fixed;
   left: 50%;
-  bottom: 108px;
+  top: 84px;
   transform: translateX(-50%);
-  width: min(480px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 108px);
+  overflow: auto;
   border-radius: 22px;
   padding: 18px 20px;
   background: rgba(11, 22, 31, 0.98);
@@ -514,9 +516,15 @@ button:disabled,
 
 .tutorial-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
+}
+
+.tutorial-actions .ui-button {
+  min-width: 148px;
 }
 
 .tutorial-highlight {
@@ -527,6 +535,21 @@ button:disabled,
 
 .menu-mode .play-layout {
   grid-template-columns: 1fr;
+}
+
+.menu-mode .board-column {
+  justify-items: center;
+}
+
+.menu-mode .canvas-shell {
+  max-width: 920px;
+  max-height: calc(100vh - 44px);
+  padding: 12px;
+}
+
+.menu-mode #game-canvas {
+  width: min(100%, 960px);
+  max-height: calc(100vh - 68px);
 }
 
 .menu-mode .dock-shell,
@@ -594,9 +617,14 @@ button:disabled,
   }
 
   .tutorial-card {
-    bottom: 20px;
+    top: 16px;
+    max-height: calc(100vh - 32px);
   }
 }
+
+
+
+
 
 
 

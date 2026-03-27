@@ -41,7 +41,7 @@ const TUTORIAL_STEP_VIEWS: Record<TutorialStepId, TutorialStepView> = {
   },
   place_mineral_drill: {
     title: "Step 2: Place Drill",
-    body: "Now place a Mineral Drill next to the Solar Collector. Adjacent modules can merge.",
+    body: "Now place a Mineral Drill. You will merge it with the Solar Collector in the next step.",
     targetSelectors: ["[data-tutorial-target='module-mineral_drill']", "[data-tutorial-target='ship-board']"],
   },
   place_third_module: {
@@ -328,4 +328,5 @@ export function updateTutorialAfterSimulation(state: RunState, before: TutorialS
     setTutorialStep(state, "mission_results");
   }
 }
+
 

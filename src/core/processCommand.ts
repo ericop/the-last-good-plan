@@ -7,7 +7,6 @@ import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
 import {
   addMessage,
-  areSlotsConnected,
   canAfford,
   getArtifactById,
   getBotCapacity,
@@ -16,7 +15,6 @@ import {
   makeBotId,
   subtractFromPool,
 } from "./utils";
-
 function recalculateShipStats(state: RunState): void {
   const defenseLevel = state.ship.upgrades.defense_grid;
   state.ship.maxHull = 120 + defenseLevel * 10;
@@ -156,10 +154,6 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
         addMessage(state, "Select two or three placed modules to create a bot.");
         return state;
       }
-      if (!areSlotsConnected(state.ship.slots, selectedSlotIds)) {
-        addMessage(state, "Selected modules must form one connected cluster to merge.");
-        return state;
-      }
       if (state.ship.bots.length >= getBotCapacity(state)) {
         addMessage(state, "Support Bay limit reached. Upgrade support capacity or lose a bot first.");
         return state;
@@ -274,3 +268,6 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return state;
   }
 }
+
+
+

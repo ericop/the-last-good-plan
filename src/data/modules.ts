@@ -1,4 +1,4 @@
-﻿import type { ModuleDefinition, ModuleId } from "../types/gameTypes";
+import type { ModuleDefinition, ModuleId } from "../types/gameTypes";
 
 export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
   solar_collector: {
@@ -8,7 +8,7 @@ export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
     description: "Produces solar income each cycle and powers solar-based merges.",
     color: 0xf6d35c,
     icon: "S",
-    fabricationCost: { solar: 10, minerals: 6, scrap: 12 },
+    fabricationCost: { solar: 10, minerals: 6, scrap: 0 },
   },
   mineral_drill: {
     id: "mineral_drill",
@@ -17,7 +17,7 @@ export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
     description: "Mines the moon objective and anchors industrial bot recipes.",
     color: 0x69c0ff,
     icon: "M",
-    fabricationCost: { solar: 8, minerals: 12, scrap: 10 },
+    fabricationCost: { solar: 8, minerals: 12, scrap: 0 },
   },
   shield_emitter: {
     id: "shield_emitter",
@@ -26,7 +26,7 @@ export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
     description: "Rebuilds shields and stabilizes defensive bot patterns.",
     color: 0x77ddbb,
     icon: "E",
-    fabricationCost: { solar: 10, minerals: 10, scrap: 12 },
+    fabricationCost: { solar: 10, minerals: 10, scrap: 0 },
   },
   pulse_cannon: {
     id: "pulse_cannon",
@@ -35,7 +35,7 @@ export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
     description: "Provides autonomous ship fire and offensive merge potential.",
     color: 0xff8d70,
     icon: "P",
-    fabricationCost: { solar: 8, minerals: 14, scrap: 10 },
+    fabricationCost: { solar: 8, minerals: 14, scrap: 0 },
   },
   cargo_core: {
     id: "cargo_core",
@@ -44,7 +44,7 @@ export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
     description: "Boosts adjacent production and improves salvage returns.",
     color: 0xd4b0ff,
     icon: "C",
-    fabricationCost: { solar: 6, minerals: 8, scrap: 12 },
+    fabricationCost: { solar: 6, minerals: 8, scrap: 0 },
   },
   repair_node: {
     id: "repair_node",
@@ -53,6 +53,7 @@ export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
     description: "Repairs allied bots and hull, enabling calm recovery loops.",
     color: 0xa6f0a2,
     icon: "R",
-    fabricationCost: { solar: 10, minerals: 8, scrap: 12 },
+    fabricationCost: { solar: 10, minerals: 8, scrap: 0 },
   },
 };
+
