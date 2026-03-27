@@ -439,11 +439,16 @@ button:disabled,
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
 }
 
 .mission-controls .mission-button {
-  min-width: 150px;
+  min-width: 140px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.1;
 }
 
 .mission-hint {
@@ -460,6 +465,25 @@ button:disabled,
   text-align: center;
   background: linear-gradient(135deg, var(--accent-cta-strong), var(--accent-cta));
   border-color: var(--line-bright);
+}
+
+.mission-bar.running .mission-copy {
+  flex: 1 1 auto;
+}
+
+.mission-bar.running .mission-copy strong {
+  font-size: 18px;
+}
+
+.mission-bar.running .mission-hint {
+  font-size: 12px;
+}
+
+.mission-bar.running .mission-button {
+  min-width: 138px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13px;
 }
 
 .mission-button.muted {
@@ -658,6 +682,8 @@ button:disabled,
     padding: 9px 10px;
   }
 }
+
+
 
 
 
