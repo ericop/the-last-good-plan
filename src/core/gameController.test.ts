@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GameController } from "./gameController";
+import { createRunState } from "./createRunState";
+import { stepSimulation } from "./simulation";
 import { pickRewardChoices } from "./utils";
 import { createDefaultDiscoveryLog } from "./discovery";
 import type { SaveData } from "../types/gameTypes";
@@ -51,6 +53,62 @@ describe("game controller updates", () => {
     expect(cappedChoices.some((artifact) => artifact.id === "spare_bays" || artifact.id === "quiet_hangars")).toBe(false);
   });
 
+  it("adds 10 seconds after the mini-boss is defeated", () => {
+    const state = createRunState(createSaveData(true), "execution");
+    state.tutorial.active = false;
+    state.ship.bots = [
+      {
+        id: "bot_boss_test",
+        recipeId: "survey_harrier",
+        name: "Survey Harrier",
+        role: "defense",
+        color: 0xffffff,
+        tags: ["defense"],
+        hp: 20,
+        maxHp: 20,
+        x: 300,
+        y: 300,
+        speed: 1,
+        mining: 0,
+        attack: 500,
+        support: 0,
+        range: 200,
+        salvage: 0,
+        cooldown: 0,
+        contribution: {
+          mined: 0,
+          damage: 0,
+          healing: 0,
+          salvage: 0,
+        },
+      },
+    ];
+    state.simulation.enemies = [
+      {
+        id: "boss_test",
+        kind: "mini_boss",
+        name: "Grave Knocker",
+        color: 0xffc266,
+        hp: 1,
+        maxHp: 1,
+        x: 300,
+        y: 300,
+        speed: 0,
+        attack: 0,
+        range: 0,
+        scrapReward: 0,
+        cooldown: 0,
+      },
+    ];
+
+    const startingDuration = state.simulation.duration;
+    stepSimulation(state, 1);
+
+    expect(state.simulation.bossDefeated).toBe(true);
+    expect(state.simulation.duration).toBe(startingDuration + 10);
+    expect(state.pendingReward?.source).toBe("boss");
+  });
+
   it("runs missions at double speed when fast forward is enabled", () => {
     Object.defineProperty(globalThis, "localStorage", {
       value: { setItem: () => undefined },
@@ -94,5 +152,6 @@ describe("game controller updates", () => {
     expect(controller.getState().simulation.elapsed).toBe(2);
   });
 });
+
 
 
