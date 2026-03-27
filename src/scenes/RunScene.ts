@@ -391,7 +391,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (state.phase === "planning") {
-      return "Place modules on the ship, select adjacent pairs to preview merges, and press Start Mission when the plan looks ready.";
+      return "Place modules on the ship, select a connected pair or trio to preview a merge, and press Start Mission when the plan looks ready.";
     }
 
     return "Mission resolution is automatic. Space pauses instantly, and doctrine changes are optional but reduce commitment.";
@@ -401,4 +401,5 @@ export class RunScene extends Phaser.Scene {
     return slots.find((slot) => slot.id === slotId);
   }
 }
+
 

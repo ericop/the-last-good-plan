@@ -1,18 +1,18 @@
 import { MODULE_DEFINITIONS } from "../data/modules";
 import { UPGRADE_DEFINITIONS } from "../data/upgrades";
 import type { GameCommand } from "../types/commands";
-import type { BotInstance, RunState, SaveData } from "../types/gameTypes";
+import type { BotInstance, ModuleId, RunState, SaveData } from "../types/gameTypes";
 import { createRunState, prepareExecutionState, resetForNextCycle } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
 import {
   addMessage,
+  areSlotsConnected,
   canAfford,
   getArtifactById,
   getBotCapacity,
   getRecipeById,
   getSlotById,
-  isAdjacent,
   makeBotId,
   subtractFromPool,
 } from "./utils";
@@ -55,6 +55,19 @@ function createBotFromRecipe(recipeId: string, index: number): BotInstance {
       salvage: 0,
     },
   };
+}
+
+function getSelectedMergeModules(state: RunState): ModuleId[] | undefined {
+  const slots = state.ui.selectedSlotIds
+    .map((slotId) => getSlotById(state.ship.slots, slotId))
+    .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot));
+  if (slots.length < 2 || slots.length > 3) {
+    return undefined;
+  }
+  if (slots.some((slot) => !slot.moduleId)) {
+    return undefined;
+  }
+  return slots.map((slot) => slot.moduleId!);
 }
 
 export function processCommand(state: RunState, command: GameCommand, saveData: SaveData): RunState {
@@ -129,41 +142,45 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       if (state.ui.selectedSlotIds.includes(slot.id)) {
         state.ui.selectedSlotIds = state.ui.selectedSlotIds.filter((slotId) => slotId !== slot.id);
       } else {
-        state.ui.selectedSlotIds = [...state.ui.selectedSlotIds, slot.id].slice(-2);
+        state.ui.selectedSlotIds = [...state.ui.selectedSlotIds, slot.id].slice(-3);
       }
       return state;
     }
     case "merge_selected": {
-      if (state.phase !== "planning" || state.ui.selectedSlotIds.length !== 2) {
+      if (state.phase !== "planning") {
         return state;
       }
-      const [slotAId, slotBId] = state.ui.selectedSlotIds;
-      const slotA = getSlotById(state.ship.slots, slotAId);
-      const slotB = getSlotById(state.ship.slots, slotBId);
-      if (!slotA?.moduleId || !slotB?.moduleId) {
+      const selectedSlotIds = state.ui.selectedSlotIds;
+      const modules = getSelectedMergeModules(state);
+      if (!modules || selectedSlotIds.length < 2 || selectedSlotIds.length > 3) {
+        addMessage(state, "Select two or three placed modules to create a bot.");
         return state;
       }
-      if (!isAdjacent(state.ship.slots, slotAId, slotBId)) {
-        addMessage(state, "Modules must be in adjacent slots to create a bot.");
+      if (!areSlotsConnected(state.ship.slots, selectedSlotIds)) {
+        addMessage(state, "Selected modules must form one connected cluster to merge.");
         return state;
       }
       if (state.ship.bots.length >= getBotCapacity(state)) {
         addMessage(state, "Support Bay limit reached. Upgrade support capacity or lose a bot first.");
         return state;
       }
-      const preview = getMergePreviewFromModules([slotA.moduleId, slotB.moduleId], state.discovery);
+      const preview = getMergePreviewFromModules(modules, state.discovery);
       if (!preview.recipe) {
         addMessage(state, preview.text);
         return state;
       }
-      const entryBefore = state.discovery[preview.recipe.id].state;
+      const entryBefore = state.discovery[preview.recipe.id]?.state ?? "unknown";
       noteRecipeUse(state.discovery, preview.recipe.id);
       if (entryBefore === "unknown") {
         state.simulation.cycleStats.discoveries.push(preview.recipe.resultName);
       }
+      selectedSlotIds.forEach((slotId) => {
+        const slot = getSlotById(state.ship.slots, slotId);
+        if (slot) {
+          slot.moduleId = undefined;
+        }
+      });
       const bot = createBotFromRecipe(preview.recipe.id, state.ship.bots.length);
-      slotA.moduleId = undefined;
-      slotB.moduleId = undefined;
       state.ship.bots.push(bot);
       state.ui.selectedSlotIds = [];
       addMessage(state, `${preview.recipe.resultName} assembled. The merge is permanent.`);

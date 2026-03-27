@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   ArtifactDefinition,
   BotInstance,
   DiscoveryLog,
@@ -77,13 +77,16 @@ export function addMessage(state: RunState, message: string): void {
   state.simulation.messageLog = state.simulation.messageLog.slice(0, 8);
 }
 
-export function getMergeKey(a: ModuleId, b: ModuleId): string {
-  return [a, b].sort().join("|");
+export function getMergeKey(modules: readonly ModuleId[]): string {
+  return [...modules].sort().join("|");
 }
 
-export function findRecipeByModules(modules: [ModuleId, ModuleId]): MergeRecipe | undefined {
-  const key = getMergeKey(modules[0], modules[1]);
-  return MERGE_RECIPES.find((recipe) => getMergeKey(recipe.modules[0], recipe.modules[1]) === key);
+export function findRecipeByModules(modules: readonly ModuleId[]): MergeRecipe | undefined {
+  if (modules.length < 2 || modules.length > 3) {
+    return undefined;
+  }
+  const key = getMergeKey(modules);
+  return MERGE_RECIPES.find((recipe) => getMergeKey(recipe.modules) === key);
 }
 
 export function getRecipeById(recipeId: string): MergeRecipe | undefined {
@@ -167,4 +170,31 @@ export function getSlotById(slots: ShipSlot[], slotId: string): ShipSlot | undef
 export function isAdjacent(slots: ShipSlot[], slotAId: string, slotBId: string): boolean {
   const slot = getSlotById(slots, slotAId);
   return Boolean(slot?.neighbors.includes(slotBId));
+}
+
+export function areSlotsConnected(slots: ShipSlot[], slotIds: readonly string[]): boolean {
+  if (slotIds.length < 2) {
+    return false;
+  }
+
+  const selected = new Set(slotIds);
+  const visited = new Set<string>();
+  const queue = [slotIds[0]];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    if (visited.has(currentId)) {
+      continue;
+    }
+    visited.add(currentId);
+
+    const current = getSlotById(slots, currentId);
+    current?.neighbors.forEach((neighborId) => {
+      if (selected.has(neighborId) && !visited.has(neighborId)) {
+        queue.push(neighborId);
+      }
+    });
+  }
+
+  return visited.size === selected.size;
 }

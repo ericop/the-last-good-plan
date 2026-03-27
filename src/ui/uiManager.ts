@@ -5,7 +5,7 @@ import { UPGRADE_DEFINITIONS } from "../data/upgrades";
 import type { GameController } from "../core/gameController";
 import { getDiscoveryDescriptor, getMergePreviewFromModules } from "../core/discovery";
 import { getMissionReadiness, getPhaseLabel, getTutorialStepView } from "../core/tutorial";
-import { getArtifactById, getBotCapacity, getSlotById } from "../core/utils";
+import { areSlotsConnected, getArtifactById, getBotCapacity, getSlotById } from "../core/utils";
 import type { DockPanelId, ModuleId, RunState, UpgradeId } from "../types/gameTypes";
 
 const DOCK_ITEMS: Array<{ id: DockPanelId; label: string }> = [
@@ -15,6 +15,10 @@ const DOCK_ITEMS: Array<{ id: DockPanelId; label: string }> = [
   { id: "upgrades", label: "Upgrades" },
   { id: "settings", label: "Settings" },
 ];
+
+function renderModuleSignature(modules: readonly ModuleId[]): string {
+  return modules.map((moduleId) => MODULE_DEFINITIONS[moduleId].shortName).join(" + ");
+}
 
 export class UIManager {
   private hudStrip: HTMLElement;
@@ -161,7 +165,7 @@ export class UIManager {
         </div>
         <div class="hud-card">
           <span class="eyebrow">Discoveries</span>
-          <strong>${MERGE_RECIPES.filter((recipe) => state.discovery[recipe.id].state !== "unknown").length}/${MERGE_RECIPES.length}</strong>
+          <strong>${MERGE_RECIPES.filter((recipe) => state.discovery[recipe.id]?.state !== "unknown").length}/${MERGE_RECIPES.length}</strong>
           <span>merge outcomes known</span>
         </div>
         <div class="hud-card">
@@ -278,7 +282,7 @@ export class UIManager {
     return `
       <div class="panel-block">
         <span class="eyebrow">Discovery Log</span>
-        <strong>${MERGE_RECIPES.filter((recipe) => state.discovery[recipe.id].state !== "unknown").length}/${MERGE_RECIPES.length} recipes revealed</strong>
+        <strong>${MERGE_RECIPES.filter((recipe) => state.discovery[recipe.id]?.state !== "unknown").length}/${MERGE_RECIPES.length} recipes revealed</strong>
       </div>
       <div class="scroll-stack">
         ${MERGE_RECIPES.map((recipe) => {
@@ -286,7 +290,7 @@ export class UIManager {
           return `
             <article class="discovery-entry ${entry.state}">
               <div>
-                <span class="eyebrow">${MODULE_DEFINITIONS[recipe.modules[0]].shortName} + ${MODULE_DEFINITIONS[recipe.modules[1]].shortName}</span>
+                <span class="eyebrow">${renderModuleSignature(recipe.modules)}</span>
                 <strong>${entry.state === "unknown" ? "Unknown Pattern" : recipe.resultName}</strong>
                 <p>${getDiscoveryDescriptor(entry, recipe)}</p>
               </div>
@@ -312,7 +316,7 @@ export class UIManager {
               `,
             )
             .join("")
-        : `<div class="empty-state">Create a bot from two adjacent modules to see it here.</div>`;
+        : `<div class="empty-state">Create a bot from connected modules to see it here.</div>`;
 
     const artifacts =
       state.ship.artifacts.length > 0
@@ -442,15 +446,22 @@ export class UIManager {
     selectedSlots: Array<NonNullable<ReturnType<typeof getSlotById>>>,
   ): string {
     let title = "Create a bot";
-    let body = "Select two adjacent placed modules to preview their merge.";
+    let body = "Select two or three connected placed modules to preview their merge.";
     let action = "";
 
-    if (selectedSlots.length === 2 && selectedSlots[0].moduleId && selectedSlots[1].moduleId) {
-      const adjacent = selectedSlots[0].neighbors.includes(selectedSlots[1].id);
-      if (!adjacent) {
-        body = "Those modules are not adjacent yet. Adjacent pairs can merge into bots.";
+    const selectedModules = selectedSlots
+      .map((slot) => slot.moduleId)
+      .filter((moduleId): moduleId is ModuleId => Boolean(moduleId));
+
+    if (selectedSlots.length >= 2 && selectedSlots.length <= 3 && selectedModules.length === selectedSlots.length) {
+      const connected = areSlotsConnected(
+        state.ship.slots,
+        selectedSlots.map((slot) => slot.id),
+      );
+      if (!connected) {
+        body = "Selected modules must form one connected cluster before they can merge.";
       } else {
-        const preview = getMergePreviewFromModules([selectedSlots[0].moduleId, selectedSlots[1].moduleId], state.discovery);
+        const preview = getMergePreviewFromModules(selectedModules, state.discovery);
         title = preview.recipe ? preview.recipe.resultName : title;
         body = preview.text;
         if (preview.recipe) {
@@ -464,7 +475,7 @@ export class UIManager {
         <span class="eyebrow">Merge Preview</span>
         <strong>${title}</strong>
         <p>${body}</p>
-        <p class="fine-print">Merging permanently consumes both modules. There is no undo.</p>
+        <p class="fine-print">Merging permanently consumes every selected module and creates one autonomous bot. There is no undo.</p>
         ${action}
       </section>
     `;
@@ -685,7 +696,7 @@ export class UIManager {
   private getGeneralGuidanceBody(state: RunState): string {
     switch (state.phase) {
       case "planning":
-        return "Place modules on the ship, merge a pair into a bot when it makes sense, then press Start Mission.";
+        return "Place modules on the ship, merge a connected pair or trio into a bot when it makes sense, then press Start Mission.";
       case "execution":
         return "Bots mine, defend, and support automatically. Doctrine changes are optional and commitment always stays visible.";
       case "results":
@@ -696,7 +707,3 @@ export class UIManager {
     }
   }
 }
-
-
-
-

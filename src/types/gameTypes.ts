@@ -1,4 +1,4 @@
-﻿export type ResourceId = "solar" | "minerals" | "scrap";
+export type ResourceId = "solar" | "minerals" | "scrap";
 export type DoctrineId = "balanced" | "extraction_focus" | "preservation_mode";
 export type ModuleId =
   | "solar_collector"
@@ -94,9 +94,11 @@ export interface BotStatsTemplate {
   salvage: number;
 }
 
+export type MergeModules = [ModuleId, ModuleId] | [ModuleId, ModuleId, ModuleId];
+
 export interface MergeRecipe {
   id: string;
-  modules: [ModuleId, ModuleId];
+  modules: MergeModules;
   resultName: string;
   role: BotRole;
   hint: string;
@@ -301,3 +303,7 @@ export interface SaveData {
   meta: MetaProgress;
   onboarding: OnboardingProgress;
 }
+
+
+
+
