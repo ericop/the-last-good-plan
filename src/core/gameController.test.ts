@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GameController } from "./gameController";
+import { pickRewardChoices } from "./utils";
 import { createDefaultDiscoveryLog } from "./discovery";
 import type { SaveData } from "../types/gameTypes";
 
@@ -32,6 +33,22 @@ describe("game controller updates", () => {
 
     expect(controller.getState().phase).toBe("planning");
     expect(emissions).toBe(1);
+  });
+
+  it("always offers a capacity artifact from moon rewards while bot capacity is below six", () => {
+    const controller = new GameController(createSaveData(true));
+    const state = controller.getState();
+
+    const moonChoices = pickRewardChoices(state, "moon");
+    expect(moonChoices.some((artifact) => artifact.id === "spare_bays")).toBe(true);
+
+    state.ship.artifacts.push("spare_bays");
+    const fallbackChoices = pickRewardChoices(state, "moon");
+    expect(fallbackChoices.some((artifact) => artifact.id === "quiet_hangars")).toBe(true);
+
+    state.ship.artifacts.push("quiet_hangars");
+    const cappedChoices = pickRewardChoices(state, "moon");
+    expect(cappedChoices.some((artifact) => artifact.id === "spare_bays" || artifact.id === "quiet_hangars")).toBe(false);
   });
 
   it("runs missions at double speed when fast forward is enabled", () => {
@@ -77,4 +94,5 @@ describe("game controller updates", () => {
     expect(controller.getState().simulation.elapsed).toBe(2);
   });
 });
+
 

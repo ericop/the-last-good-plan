@@ -64,7 +64,7 @@ function removeDeadBots(state: RunState): void {
 }
 
 function offerReward(state: RunState, source: RewardSource): boolean {
-  const choices = pickRewardChoices(state);
+  const choices = pickRewardChoices(state, source);
   if (choices.length === 0) {
     addMessage(state, "No new artifact patterns remain in the vault.");
     return false;
@@ -400,4 +400,5 @@ export function stepSimulation(state: RunState, dt: number): boolean {
 
   return majorUpdate;
 }
+
 

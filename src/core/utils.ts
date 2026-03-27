@@ -5,6 +5,7 @@ import type {
   MergeRecipe,
   ModuleId,
   ResourcePool,
+  RewardSource,
   RunState,
   ShipSlot,
 } from "../types/gameTypes";
@@ -108,10 +109,29 @@ export function getRecipeById(recipeId: string): MergeRecipe | undefined {
   return MERGE_RECIPES.find((recipe) => recipe.id === recipeId);
 }
 
-export function pickRewardChoices(state: RunState): ArtifactDefinition[] {
+const CAPACITY_REWARD_PRIORITY = ["spare_bays", "quiet_hangars"] as const;
+
+export function pickRewardChoices(state: RunState, source: RewardSource): ArtifactDefinition[] {
   const pool = ARTIFACT_DEFINITIONS.filter((artifact) => !state.ship.artifacts.includes(artifact.id));
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, Math.min(3, shuffled.length));
+  const guaranteedCapacityReward =
+    source === "moon" && getBotCapacity(state) < 6
+      ? CAPACITY_REWARD_PRIORITY.map((artifactId) => pool.find((artifact) => artifact.id === artifactId)).find(Boolean)
+      : undefined;
+
+  const remainingPool = guaranteedCapacityReward
+    ? pool.filter((artifact) => artifact.id !== guaranteedCapacityReward.id)
+    : pool;
+  const shuffled = [...remainingPool].sort(() => Math.random() - 0.5);
+  const picks = guaranteedCapacityReward ? [guaranteedCapacityReward] : [];
+
+  for (const artifact of shuffled) {
+    if (picks.length >= 3) {
+      break;
+    }
+    picks.push(artifact);
+  }
+
+  return picks;
 }
 
 export function getArtifactById(artifactId: string): ArtifactDefinition | undefined {
@@ -213,6 +233,8 @@ export function areSlotsConnected(slots: ShipSlot[], slotIds: readonly string[])
 
   return visited.size === selected.size;
 }
+
+
 
 
 
