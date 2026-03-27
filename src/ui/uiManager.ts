@@ -45,7 +45,7 @@ export class UIManager {
             <section class="dock-panel" id="dock-panel"></section>
           </aside>
           <main class="board-column">
-            <div class="canvas-shell" data-tutorial-target="ship-board">
+            <div class="canvas-shell main-panel" data-panel="main-panel" data-tutorial-target="ship-board">
               <div id="game-canvas"></div>
             </div>
             <div class="mission-bar-wrap" id="mission-bar"></div>
@@ -793,6 +793,7 @@ export class UIManager {
     }
   }
 }
+
 
 
 

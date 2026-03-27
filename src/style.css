@@ -301,13 +301,13 @@ button:disabled,
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   justify-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .canvas-shell {
   width: 100%;
   max-width: 1260px;
-  max-height: calc(100vh - 220px);
+  max-height: calc(100vh - 188px);
   min-height: 0;
   border-radius: 24px;
   padding: 10px;
@@ -319,9 +319,9 @@ button:disabled,
 }
 
 #game-canvas {
-  width: min(86%, 1180px);
+  width: min(88%, 1180px);
   aspect-ratio: 3 / 2;
-  max-height: calc(100vh - 244px);
+  max-height: calc(100vh - 210px);
   min-height: 0;
   display: flex;
   align-items: center;
@@ -405,18 +405,19 @@ button:disabled,
 }
 
 .mission-bar-wrap {
+  width: 100%;
   display: flex;
   justify-content: center;
 }
 
 .mission-bar {
   width: min(760px, 100%);
-  border-radius: 22px;
-  padding: 14px 16px;
+  border-radius: 20px;
+  padding: 9px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   position: sticky;
   bottom: 0;
   background: linear-gradient(180deg, rgba(17, 31, 42, 0.98), rgba(11, 22, 31, 0.98));
@@ -426,25 +427,28 @@ button:disabled,
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .mission-copy strong {
-  font-size: 24px;
+  font-size: 19px;
+  line-height: 1.05;
 }
 .mission-controls {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .mission-controls .mission-button {
-  min-width: 180px;
+  min-width: 150px;
 }
 
 .mission-hint {
+  font-size: 13px;
+  line-height: 1.18;
   color: var(--text-soft);
 }
 
@@ -506,42 +510,61 @@ button:disabled,
   position: fixed;
   inset: 0;
   background: rgba(4, 9, 14, 0.68);
+  z-index: 54;
 }
 
 .tutorial-card {
   position: fixed;
   left: 50%;
-  top: 84px;
+  top: 8px;
   transform: translateX(-50%);
-  width: min(520px, calc(100vw - 32px));
-  max-height: calc(100vh - 108px);
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 16px);
   overflow: auto;
-  border-radius: 22px;
-  padding: 18px 20px;
+  border-radius: 16px;
+  padding: 10px 12px;
   background: rgba(11, 22, 31, 0.98);
-  z-index: 31;
+  z-index: 60;
 }
 
 .tutorial-card h2 {
-  margin: 8px 0 10px;
+  margin: 4px 0 6px;
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.tutorial-card .eyebrow {
+  font-size: 8px;
+  letter-spacing: 0.14em;
+}
+
+.tutorial-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.28;
 }
 
 .tutorial-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .tutorial-actions .ui-button {
-  min-width: 148px;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .tutorial-highlight {
   position: relative;
-  z-index: 40;
+  z-index: 56;
   box-shadow: 0 0 0 3px rgba(240, 207, 125, 0.9), 0 0 0 10px rgba(240, 207, 125, 0.16);
 }
 
@@ -629,10 +652,17 @@ button:disabled,
   }
 
   .tutorial-card {
-    top: 16px;
-    max-height: calc(100vh - 32px);
+    top: 8px;
+    width: min(320px, calc(100vw - 16px));
+    max-height: calc(100vh - 12px);
+    padding: 9px 10px;
   }
 }
+
+
+
+
+
 
 
 

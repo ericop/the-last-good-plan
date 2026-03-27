@@ -70,7 +70,7 @@ export class RunScene extends Phaser.Scene {
       fontSize: "18px",
       color: "#e6f3ff",
     });
-    this.objectiveText = this.add.text(664, 58, "", {
+    this.objectiveText = this.add.text(664, 68, "", {
       fontFamily: "Trebuchet MS, Verdana, sans-serif",
       fontSize: "16px",
       color: "#d3edf6",
@@ -401,6 +401,7 @@ export class RunScene extends Phaser.Scene {
     return slots.find((slot) => slot.id === slotId);
   }
 }
+
 
 
 
