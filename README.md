@@ -1,14 +1,11 @@
 # The Last Good Plan
-
 ---
-
-## ?? Short Description
 
 Design a self-sustaining spaceship, commit to a plan, and watch it either hold... or fall apart in the silence of deep space.
 
 [Try the game yourself](https://ericop.github.io/the-last-good-plan/)
 
-## ?? About This Game
+## 🚀⚙️ About This Game
 
 The Last Good Plan is a calm system-building roguelike about designing a self-sustaining spaceship against the quiet pressures and unforgiving realities of life in deep space.
 
