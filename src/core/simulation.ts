@@ -20,9 +20,22 @@ import {
   pickRewardChoices,
   roundPool,
 } from "./utils";
+import { beginBossEncounter, getActiveBoss, getBossDamageProfile, handleBossDefeat, spawnBoss, tickBossEncounter } from "./bossManager";
+
+interface DamageSource {
+  kind: "module" | "bot";
+  attackerBot?: BotInstance;
+}
 
 function getCargoCoreCount(slots: ShipSlot[]): number {
   return slots.filter((slot) => slot.moduleId === "cargo_core").length;
+}
+
+function isModuleTemporarilyDisabled(state: RunState, moduleId: ModuleId): boolean {
+  return (
+    state.simulation.bossEncounter.disabledModuleId === moduleId &&
+    state.simulation.bossEncounter.disabledModuleTimer > 0
+  );
 }
 
 function grantResources(state: RunState, resource: "solar" | "minerals" | "scrap", amount: number): void {
@@ -64,14 +77,19 @@ function removeDeadBots(state: RunState): void {
 }
 
 function offerReward(state: RunState, source: RewardSource): boolean {
-  const choices = pickRewardChoices(state, source);
+  const choices = pickRewardChoices(state, source === "boss_chest" ? "boss_chest" : source);
   if (choices.length === 0) {
     addMessage(state, "No new artifact patterns remain in the vault.");
     return false;
   }
   state.pendingReward = {
     source,
-    choices: choices.map((choice) => choice.id),
+    title: source === "moon" ? "Ancient Artifact" : "Recovered Chest",
+    description:
+      source === "moon"
+        ? "Choose one artifact for the run. The moon seam will stay open while you decide."
+        : "Choose one recovered relic from the broken warform chest.",
+    choices: choices.map((choice) => ({ kind: "artifact", id: choice.id })),
   };
   state.paused = true;
   return true;
@@ -83,6 +101,11 @@ function destroyEnemy(state: RunState, enemy: EnemyInstance): boolean {
   const scrapGain = enemy.scrapReward * salvageMultiplier;
   grantResources(state, "scrap", scrapGain);
 
+  if (enemy.kind === "boss" && !state.simulation.bossDefeated) {
+    state.simulation.bossDefeated = true;
+    return handleBossDefeat(state, enemy);
+  }
+
   if (enemy.kind === "mini_boss" && !state.simulation.bossDefeated) {
     state.simulation.bossDefeated = true;
     if (state.simulation.objective.integrity > 0) {
@@ -91,14 +114,34 @@ function destroyEnemy(state: RunState, enemy: EnemyInstance): boolean {
     } else {
       addMessage(state, "Mini-boss broken. Ancient chest recovered.");
     }
-    offerReward(state, "boss");
+    offerReward(state, "boss_chest");
     return true;
   }
   return false;
 }
 
-function damageEnemy(state: RunState, enemy: EnemyInstance, amount: number): boolean {
-  enemy.hp -= amount;
+function damageEnemy(state: RunState, enemy: EnemyInstance, amount: number, source: DamageSource): boolean {
+  let damage = amount;
+  if (enemy.kind === "boss") {
+    const profile = getBossDamageProfile(enemy, source.attackerBot);
+    damage *= profile.multiplier;
+
+    if (profile.reflectRatio > 0) {
+      if (source.attackerBot) {
+        source.attackerBot.hp = Math.max(0, source.attackerBot.hp - damage * profile.reflectRatio);
+      } else {
+        damageShip(state, damage * profile.reflectRatio * 0.55);
+      }
+    }
+
+    if ((enemy.bossShield ?? 0) > 0) {
+      const absorbed = Math.min(enemy.bossShield ?? 0, damage);
+      enemy.bossShield = Math.max(0, (enemy.bossShield ?? 0) - absorbed);
+      damage -= absorbed;
+    }
+  }
+
+  enemy.hp -= damage;
   if (enemy.hp <= 0) {
     enemy.hp = 0;
     return destroyEnemy(state, enemy);
@@ -107,6 +150,14 @@ function damageEnemy(state: RunState, enemy: EnemyInstance, amount: number): boo
 }
 
 function spawnWave(state: RunState, wave: ThreatWave): void {
+  if (wave.kind === "boss") {
+    const boss = spawnBoss(state.cycle);
+    state.simulation.enemies.push(boss);
+    beginBossEncounter(state, boss);
+    addMessage(state, `${wave.label} entering the screen.`);
+    return;
+  }
+
   const definition = ENEMY_DEFINITIONS[wave.kind];
   for (let index = 0; index < wave.count; index += 1) {
     state.simulation.enemies.push({
@@ -135,7 +186,7 @@ function applyPassiveModules(state: RunState, dt: number): void {
   const attackArtifact = getGlobalArtifactMultiplier(state, "attackMultiplier");
 
   for (const slot of state.ship.slots) {
-    if (!slot.moduleId) {
+    if (!slot.moduleId || isModuleTemporarilyDisabled(state, slot.moduleId)) {
       continue;
     }
     const cargoAdj = countAdjacentWithModule(state.ship.slots, slot, "cargo_core");
@@ -163,13 +214,13 @@ function applyPassiveModules(state: RunState, dt: number): void {
       }
       case "pulse_cannon": {
         const target = state.simulation.enemies
-          .filter((enemy) => distance(enemy, SHIP_CENTER) < 220)
+          .filter((enemy) => distance(enemy, SHIP_CENTER) < 240)
           .sort((left, right) => distance(left, SHIP_CENTER) - distance(right, SHIP_CENTER))[0];
         if (!target) {
           break;
         }
         const damage = 5.2 * dt * attackArtifact * (1 + state.ship.upgrades.defense_grid * 0.14) * (1 + cargoAdj * 0.05);
-        damageEnemy(state, target, damage);
+        damageEnemy(state, target, damage, { kind: "module" });
         break;
       }
       case "repair_node": {
@@ -194,6 +245,13 @@ function applyPassiveModules(state: RunState, dt: number): void {
 }
 
 function chooseEnemyTarget(state: RunState, bot: BotInstance): EnemyInstance | undefined {
+  if (bot.tags.includes("boss_breaker")) {
+    const boss = getActiveBoss(state);
+    if (boss) {
+      return boss;
+    }
+  }
+
   const sorted = [...state.simulation.enemies].sort((left, right) => {
     if (state.doctrine === "preservation_mode") {
       return distance(left, SHIP_CENTER) - distance(right, SHIP_CENTER);
@@ -243,6 +301,9 @@ function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
       state.simulation.objective.integrity = Math.max(0, state.simulation.objective.integrity - mineAmount);
       grantResources(state, "minerals", mineAmount * 1.2);
       bot.contribution.mined += mineAmount;
+      if (bot.tags.includes("solar_bleed")) {
+        grantResources(state, "solar", 0.45 * dt);
+      }
     }
     return;
   }
@@ -257,6 +318,9 @@ function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
         const healAmount = bot.support * multipliers.support * dt;
         ally.hp = Math.min(ally.maxHp, ally.hp + healAmount);
         bot.contribution.healing += healAmount;
+        if (bot.tags.includes("shield_aura")) {
+          state.ship.shield = Math.min(state.ship.maxShield, state.ship.shield + healAmount * 0.35);
+        }
       }
     } else {
       moveToward(bot, SHIP_CENTER, bot.speed * 0.9, dt);
@@ -264,6 +328,9 @@ function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
         const healAmount = bot.support * multipliers.support * dt;
         healShip(state, healAmount);
         bot.contribution.healing += healAmount;
+        if (bot.tags.includes("shield_aura")) {
+          state.ship.shield = Math.min(state.ship.maxShield, state.ship.shield + healAmount * 0.45);
+        }
       }
     }
     return;
@@ -277,7 +344,7 @@ function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
   moveToward(bot, target, bot.speed * (0.9 + state.commitmentBonus * 0.35), dt);
   if (distance(bot, target) <= bot.range) {
     const damage = bot.attack * multipliers.attack * dt;
-    damageEnemy(state, target, damage);
+    damageEnemy(state, target, damage, { kind: "bot", attackerBot: bot });
     bot.contribution.damage += damage;
   }
 }
@@ -380,6 +447,11 @@ export function stepSimulation(state: RunState, dt: number): boolean {
     majorUpdate = true;
   }
 
+  tickBossEncounter(state, dt);
+  if (state.simulation.bossEncounter.introTimer > 0) {
+    return true;
+  }
+
   applyPassiveModules(state, dt);
   for (const bot of state.ship.bots) {
     applyBotBehavior(state, bot, dt);
@@ -405,8 +477,3 @@ export function stepSimulation(state: RunState, dt: number): boolean {
 
   return majorUpdate;
 }
-
-
-
-
-

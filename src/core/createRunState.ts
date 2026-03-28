@@ -1,5 +1,5 @@
 import { BOARD_ORIGIN, SLOT_GAP, SLOT_SIZE } from "../game/constants";
-import { createThreatSchedule } from "../data/waves";
+import { createEmptyEpicInventory } from "../data/epicModuleRegistry";
 import type {
   BotInstance,
   DiscoveryLog,
@@ -9,6 +9,7 @@ import type {
   SimulationState,
 } from "../types/gameTypes";
 import { createTutorialState } from "./tutorial";
+import { createCycleThreatSchedule, getCycleDuration } from "./bossManager";
 import { createEmptyPool, getBotStagingPosition } from "./utils";
 
 interface CreateRunStateOptions {
@@ -42,8 +43,8 @@ function createSlots(): ShipSlot[] {
 function createSimulationState(cycle: number): SimulationState {
   return {
     elapsed: 0,
-    duration: 46,
-    upcomingThreats: createThreatSchedule(cycle),
+    duration: getCycleDuration(cycle),
+    upcomingThreats: createCycleThreatSchedule(cycle),
     threatCursor: 0,
     enemies: [],
     objective: {
@@ -54,6 +55,16 @@ function createSimulationState(cycle: number): SimulationState {
     bossDefeated: false,
     moonRewardTriggered: false,
     perfectCommitmentRewardGranted: false,
+    bossEncounter: {
+      activeBossId: undefined,
+      activeBossName: undefined,
+      rewardEpicId: undefined,
+      introTimer: 0,
+      telegraph: undefined,
+      telegraphTimer: 0,
+      disabledModuleId: undefined,
+      disabledModuleTimer: 0,
+    },
     messageLog: ["Planning phase. Place modules, create a bot, then start the mission."],
     cycleStats: {
       gained: createEmptyPool(),
@@ -103,6 +114,7 @@ export function createRunState(
         support_bay: 0,
       },
       artifacts: [],
+      epicInventory: createEmptyEpicInventory(),
       botCapacityBase: 4,
     },
     simulation: createSimulationState(1),
@@ -179,16 +191,3 @@ export function prepareExecutionState(state: RunState): void {
     `Mission ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
   ];
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

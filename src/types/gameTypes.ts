@@ -7,14 +7,25 @@ export type ModuleId =
   | "pulse_cannon"
   | "cargo_core"
   | "repair_node";
+export type EpicModuleId = "dawn_prism" | "war_forge" | "sainted_patch";
+export type FabricationOptionId = ModuleId | EpicModuleId;
 export type UpgradeId = "mining_array" | "defense_grid" | "support_bay";
 export type Phase = "menu" | "planning" | "execution" | "results" | "run_over";
 export type DiscoveryState = "unknown" | "discovered" | "known_mastered_lite";
 export type BotRole = "mining" | "defense" | "support" | "hybrid";
 export type ArtifactType = "passive" | "doctrine" | "merge_support";
-export type RewardSource = "moon" | "boss";
-export type EnemyKind = "scavenger" | "mini_boss";
+export type RewardSource = "moon" | "boss_chest" | "boss";
+export type EnemyKind = "scavenger" | "mini_boss" | "boss";
 export type DockPanelId = "ship" | "build" | "bots" | "doctrine" | "log";
+export type BossBehavior =
+  | { kind: "periodic_shield"; interval: number; amount: number }
+  | { kind: "spawning_minions"; interval: number; count: number }
+  | { kind: "charging_attack"; interval: number; chargeTime: number; damage: number }
+  | { kind: "directional_sweep"; interval: number; damage: number; width: number };
+export type BossModifier =
+  | { kind: "reduces_projectile_damage"; multiplier: number }
+  | { kind: "reflects_damage"; ratio: number }
+  | { kind: "disables_module_type"; moduleId: ModuleId; interval: number; duration: number };
 export type TutorialStepId =
   | "intro"
   | "place_solar_collector"
@@ -85,6 +96,33 @@ export interface ArtifactDefinition {
   };
 }
 
+export interface EpicModuleDefinition {
+  id: EpicModuleId;
+  baseModuleId: ModuleId;
+  name: string;
+  shortName: string;
+  description: string;
+  rarity: "epic";
+  color: number;
+  previewText: string;
+  mergeNote: string;
+  applyToBot: (bot: BotInstance) => void;
+}
+
+export interface BossDefinition {
+  id: string;
+  name: string;
+  color: number;
+  maxHp: number;
+  shield: number;
+  speed: number;
+  attack: number;
+  range: number;
+  behaviors: BossBehavior[];
+  modifiers: BossModifier[];
+  reward: EpicModuleId;
+}
+
 export interface BotStatsTemplate {
   hp: number;
   speed: number;
@@ -119,6 +157,7 @@ export interface ShipSlot {
   y: number;
   neighbors: string[];
   moduleId?: ModuleId;
+  epicModuleId?: EpicModuleId;
 }
 
 export interface BotInstance {
@@ -138,6 +177,7 @@ export interface BotInstance {
   support: number;
   range: number;
   salvage: number;
+  epicModules: EpicModuleId[];
   cooldown: number;
   contribution: {
     mined: number;
@@ -172,6 +212,10 @@ export interface EnemyInstance {
   range: number;
   scrapReward: number;
   cooldown: number;
+  bossId?: string;
+  bossShield?: number;
+  maxBossShield?: number;
+  bossBehaviorTimers?: Record<string, number>;
 }
 
 export interface ThreatWave {
@@ -179,6 +223,7 @@ export interface ThreatWave {
   label: string;
   kind: EnemyKind;
   count: number;
+  bossId?: string;
 }
 
 export interface ObjectiveState {
@@ -208,9 +253,15 @@ export interface OnboardingProgress {
   tutorialCompleted: boolean;
 }
 
+export type RewardChoice =
+  | { kind: "artifact"; id: string }
+  | { kind: "epic_module"; id: EpicModuleId };
+
 export interface RewardOffer {
   source: RewardSource;
-  choices: string[];
+  title: string;
+  description: string;
+  choices: RewardChoice[];
 }
 
 export interface CycleSummary {
@@ -233,7 +284,7 @@ export interface TutorialState {
 }
 
 export interface UiState {
-  selectedFabricationModuleId?: ModuleId;
+  selectedFabricationModuleId?: FabricationOptionId;
   selectedSlotIds: string[];
   showDiscoveryLog: boolean;
   activeDockPanel: DockPanelId;
@@ -263,6 +314,16 @@ export interface SimulationState {
   bossDefeated: boolean;
   moonRewardTriggered: boolean;
   perfectCommitmentRewardGranted: boolean;
+  bossEncounter: {
+    activeBossId?: string;
+    activeBossName?: string;
+    rewardEpicId?: EpicModuleId;
+    introTimer: number;
+    telegraph?: string;
+    telegraphTimer: number;
+    disabledModuleId?: ModuleId;
+    disabledModuleTimer: number;
+  };
   messageLog: string[];
   cycleStats: CycleStats;
 }
@@ -276,6 +337,7 @@ export interface ShipState {
   maxShield: number;
   upgrades: Record<UpgradeId, number>;
   artifacts: string[];
+  epicInventory: Record<EpicModuleId, number>;
   botCapacityBase: number;
 }
 

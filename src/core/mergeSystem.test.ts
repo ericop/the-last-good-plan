@@ -4,7 +4,7 @@ import { createRunState, prepareExecutionState } from "./createRunState";
 import { createDefaultDiscoveryLog, getMergePreviewFromModules } from "./discovery";
 import { processCommand } from "./processCommand";
 import { findRecipeByModules } from "./utils";
-import type { ModuleId, SaveData } from "../types/gameTypes";
+import type { BotInstance, ModuleId, SaveData } from "../types/gameTypes";
 
 const MODULE_IDS: ModuleId[] = [
   "solar_collector",
@@ -25,6 +25,35 @@ function createSaveData(): SaveData {
     },
     onboarding: {
       tutorialCompleted: true,
+    },
+  };
+}
+
+function createBotStub(index: number): BotInstance {
+  return {
+    id: `bot_${index}`,
+    recipeId: "survey_harrier",
+    name: "Survey Harrier",
+    role: "mining",
+    color: 0xffffff,
+    tags: ["solar", "mining"],
+    hp: 20,
+    maxHp: 20,
+    x: 0,
+    y: 0,
+    speed: 1,
+    mining: 1,
+    attack: 1,
+    support: 0,
+    range: 1,
+    salvage: 0,
+    epicModules: [],
+    cooldown: 0,
+    contribution: {
+      mined: 0,
+      damage: 0,
+      healing: 0,
+      salvage: 0,
     },
   };
 }
@@ -127,6 +156,7 @@ describe("expanded merge system", () => {
     expect(slotC.moduleId).toBeUndefined();
     expect(state.discovery[recipe!.id].state).toBe("discovered");
   });
+
   it("creates a bot from a disconnected valid triple merge", () => {
     const saveData = createSaveData();
     const state = createRunState(saveData, "planning");
@@ -151,7 +181,6 @@ describe("expanded merge system", () => {
     expect(slotC.moduleId).toBeUndefined();
     expect(state.discovery[recipe!.id].state).toBe("discovered");
   });
-
 
   it("keeps pre-mission bot discoveries for the debrief", () => {
     const saveData = createSaveData();
@@ -180,31 +209,7 @@ describe("expanded merge system", () => {
     slotA.moduleId = "solar_collector";
     slotB.moduleId = "mineral_drill";
     state.ui.selectedSlotIds = [slotA.id, slotB.id];
-    state.ship.bots = Array.from({ length: state.ship.botCapacityBase }, (_, index) => ({
-      id: `bot_${index}`,
-      recipeId: "survey_harrier",
-      name: "Survey Harrier",
-      role: "mining" as const,
-      color: 0xffffff,
-      tags: ["solar", "mining"],
-      hp: 20,
-      maxHp: 20,
-      x: 0,
-      y: 0,
-      speed: 1,
-      mining: 1,
-      attack: 1,
-      support: 0,
-      range: 1,
-      salvage: 0,
-      cooldown: 0,
-      contribution: {
-        mined: 0,
-        damage: 0,
-        healing: 0,
-        salvage: 0,
-      },
-    }));
+    state.ship.bots = Array.from({ length: state.ship.botCapacityBase }, (_, index) => createBotStub(index));
 
     processCommand(state, { type: "merge_selected" }, saveData);
 
@@ -213,6 +218,3 @@ describe("expanded merge system", () => {
     expect(slotB.moduleId).toBe("mineral_drill");
   });
 });
-
-
-

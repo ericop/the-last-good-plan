@@ -1,4 +1,5 @@
 import { DOCTRINES } from "../data/doctrines";
+import { getEpicModuleById, getFabricationCardData, getSlotModulePresentation, isEpicModuleId } from "../data/epicModuleRegistry";
 import { MERGE_RECIPES } from "../data/merges";
 import { MODULE_DEFINITIONS } from "../data/modules";
 import { UPGRADE_DEFINITIONS } from "../data/upgrades";
@@ -6,7 +7,7 @@ import type { GameController } from "../core/gameController";
 import { getDiscoveryDescriptor, getMergePreviewFromModules } from "../core/discovery";
 import { getMissionReadiness, getPhaseLabel, getTutorialStepView } from "../core/tutorial";
 import { getArtifactById, getBotCapacity, getSlotById } from "../core/utils";
-import type { DockPanelId, ModuleId, RunState, UpgradeId } from "../types/gameTypes";
+import type { DockPanelId, FabricationOptionId, ModuleId, RunState, UpgradeId } from "../types/gameTypes";
 import { applyButtonHoverEffect, applyPanelGlow, pulseCounter } from "./effects";
 
 const DOCK_ITEMS: Array<{ id: DockPanelId; label: string }> = [
@@ -87,7 +88,7 @@ export class UIManager {
       case "fabricate":
         this.controller.dispatch({
           type: "select_fabrication_module",
-          moduleId: actionElement.dataset.module as ModuleId,
+          moduleId: actionElement.dataset.module as FabricationOptionId,
         });
         break;
       case "set-doctrine":
@@ -117,7 +118,8 @@ export class UIManager {
       case "choose-reward":
         this.controller.dispatch({
           type: "choose_reward",
-          artifactId: actionElement.dataset.artifact!,
+          rewardKind: actionElement.dataset.rewardKind as "artifact" | "epic_module",
+          rewardId: actionElement.dataset.rewardId!,
         });
         break;
       case "continue-results":
@@ -274,7 +276,18 @@ export class UIManager {
       .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot));
     const selectedText =
       selectedSlots.length > 0
-        ? selectedSlots.map((slot) => `${slot.label}${slot.moduleId ? ` | ${MODULE_DEFINITIONS[slot.moduleId].name}` : ""}`).join("<br>")
+        ? selectedSlots
+            .map((slot) => {
+              const presentation = getSlotModulePresentation(slot);
+              if (!presentation) {
+                return slot.label;
+              }
+              if (presentation.epicModuleId) {
+                return `${slot.label} | ${getEpicModuleById(presentation.epicModuleId).name}`;
+              }
+              return `${slot.label} | ${MODULE_DEFINITIONS[presentation.moduleId].name}`;
+            })
+            .join("<br>")
         : "Nothing selected yet";
 
     return `
@@ -388,28 +401,30 @@ export class UIManager {
   }
 
   private renderShipUpgradePanel(state: RunState): string {
+    const cards = Object.values(UPGRADE_DEFINITIONS)
+      .map((upgrade) => {
+        const level = state.ship.upgrades[upgrade.id];
+        const nextCost = upgrade.costs[level];
+        const disabled = state.phase !== "planning" || !nextCost;
+        return `
+          <button class="upgrade-card" data-action="spend-upgrade" data-upgrade="${upgrade.id}" ${disabled ? "disabled" : ""}>
+            <strong>${upgrade.name} Lv.${level}</strong>
+            <span>${upgrade.summary}</span>
+            <small>Each level: ${upgrade.perLevelText}</small>
+            <small>${nextCost ? `Next: S ${nextCost.solar} | M ${nextCost.minerals} | C ${nextCost.scrap}` : "Maxed"}</small>
+          </button>
+        `;
+      })
+      .join("");
+
     return `
       <div class="panel-block">
         <span class="eyebrow">Ship Upgrades</span>
         <strong>Strengthen the plan</strong>
         <p>Upgrade mining, defense, and support here without leaving the ship overview.</p>
-      </div>
-      <div class="scroll-stack">
-        ${Object.values(UPGRADE_DEFINITIONS)
-          .map((upgrade) => {
-            const level = state.ship.upgrades[upgrade.id];
-            const nextCost = upgrade.costs[level];
-            const disabled = state.phase !== "planning" || !nextCost;
-            return `
-              <button class="upgrade-card" data-action="spend-upgrade" data-upgrade="${upgrade.id}" ${disabled ? "disabled" : ""}>
-                <strong>${upgrade.name} Lv.${level}</strong>
-                <span>${upgrade.summary}</span>
-                <small>Each level: ${upgrade.perLevelText}</small>
-                <small>${nextCost ? `Next: S ${nextCost.solar} | M ${nextCost.minerals} | C ${nextCost.scrap}` : "Maxed"}</small>
-              </button>
-            `;
-          })
-          .join("")}
+        <div class="upgrade-stack">
+          ${cards}
+        </div>
       </div>
     `;
   }
@@ -459,31 +474,45 @@ export class UIManager {
   }
 
   private renderModulePanel(state: RunState): string {
+    const epicCards = Object.entries(state.ship.epicInventory)
+      .filter(([, count]) => count > 0)
+      .map(([epicId, count]) => {
+        const epic = getFabricationCardData(epicId as FabricationOptionId);
+        const selected = state.ui.selectedFabricationModuleId === epicId;
+        const disabled = state.phase !== "planning" || count <= 0;
+        return `
+          <button class="module-card ${selected ? "selected" : ""}" data-action="fabricate" data-module="${epicId}" ${disabled ? "disabled" : ""}>
+            <strong>${epic.name}</strong>
+            <span>${epic.description}</span>
+            <small>${epic.costLabel} | ${count} available</small>
+          </button>
+        `;
+      })
+      .join("");
+
+    const standardCards = Object.values(MODULE_DEFINITIONS)
+      .map((module) => {
+        const card = getFabricationCardData(module.id);
+        const selected = state.ui.selectedFabricationModuleId === module.id;
+        const disabled = state.phase !== "planning";
+        return `
+          <button class="module-card ${selected ? "selected" : ""}" data-action="fabricate" data-module="${module.id}" data-tutorial-target="module-${module.id}" ${disabled ? "disabled" : ""}>
+            <strong>${card.name}</strong>
+            <span>${card.description}</span>
+            <small>${card.costLabel}</small>
+          </button>
+        `;
+      })
+      .join("");
+
     return `
       <section class="core-panel" data-tutorial-target="module-panel">
         <span class="eyebrow">Place Modules</span>
         <strong>Build the ship</strong>
+        ${epicCards ? `<span class="eyebrow">Epic Modules</span><div class="module-grid compact">${epicCards}</div>` : ""}
+        <span class="eyebrow">Standard Modules</span>
         <div class="module-grid compact">
-          ${Object.values(MODULE_DEFINITIONS)
-            .map((module) => {
-              const selected = state.ui.selectedFabricationModuleId === module.id;
-              const disabled = state.phase !== "planning";
-              const costParts = [
-                `S ${module.fabricationCost.solar}`,
-                `M ${module.fabricationCost.minerals}`,
-              ];
-              if (module.fabricationCost.scrap > 0) {
-                costParts.push(`C ${module.fabricationCost.scrap}`);
-              }
-              return `
-                <button class="module-card ${selected ? "selected" : ""}" data-action="fabricate" data-module="${module.id}" data-tutorial-target="module-${module.id}" ${disabled ? "disabled" : ""}>
-                  <strong>${module.name}</strong>
-                  <span>${module.description}</span>
-                  <small>${costParts.join(" | ")}</small>
-                </button>
-              `;
-            })
-            .join("")}
+          ${standardCards}
         </div>
       </section>
     `;
@@ -502,11 +531,18 @@ export class UIManager {
     const selectedModules = selectedSlots
       .map((slot) => slot.moduleId)
       .filter((moduleId): moduleId is ModuleId => Boolean(moduleId));
+    const epicModules = selectedSlots
+      .map((slot) => slot.epicModuleId)
+      .filter((epicId): epicId is NonNullable<typeof epicId> => Boolean(epicId));
 
     if (selectedSlots.length >= 2 && selectedSlots.length <= 3 && selectedModules.length === selectedSlots.length) {
       const preview = getMergePreviewFromModules(selectedModules, state.discovery);
       title = preview.recipe ? preview.recipe.resultName : title;
       body = preview.text;
+      if (preview.recipe && epicModules.length > 0) {
+        const epicNotes = epicModules.map((epicId) => getEpicModuleById(epicId).mergeNote).join(" ");
+        body = `${body} ${epicNotes}`;
+      }
       if (preview.recipe) {
         if (atBotCapacity) {
           body = `Support Bay full at ${state.ship.bots.length}/${botCapacity} bots. Upgrade Support Bay before creating another bot.`;
@@ -624,22 +660,35 @@ export class UIManager {
 
     if (state.pendingReward) {
       const choices = state.pendingReward.choices
-        .map((artifactId) => getArtifactById(artifactId))
-        .filter(Boolean)
-        .map(
-          (artifact) => `
-            <button class="reward-card" data-action="choose-reward" data-artifact="${artifact!.id}">
-              <strong>${artifact!.name}</strong>
-              <span>${artifact!.summary}</span>
-              <small>${artifact!.type.replace(/_/g, " ")}</small>
+        .map((choice) => {
+          if (choice.kind === "artifact") {
+            const artifact = getArtifactById(choice.id);
+            if (!artifact) {
+              return "";
+            }
+            return `
+              <button class="reward-card" data-action="choose-reward" data-reward-kind="artifact" data-reward-id="${artifact.id}">
+                <strong>${artifact.name}</strong>
+                <span>${artifact.summary}</span>
+                <small>${artifact.type.replace(/_/g, " ")}</small>
+              </button>
+            `;
+          }
+
+          const epic = getEpicModuleById(choice.id);
+          return `
+            <button class="reward-card epic" data-action="choose-reward" data-reward-kind="epic_module" data-reward-id="${epic.id}">
+              <strong>${epic.name}</strong>
+              <span>${epic.description}</span>
+              <small>Epic module core</small>
             </button>
-          `,
-        )
+          `;
+        })
         .join("");
       layers.push(`
         <section class="modal-card reward-modal">
-          <h2>${state.pendingReward.source === "moon" ? "Ancient Artifact" : "Recovered Chest"}</h2>
-          <p>Choose exactly one reward for the run. The mission continues after you decide.</p>
+          <h2>${state.pendingReward.title}</h2>
+          <p>${state.pendingReward.description}</p>
           <div class="reward-grid">${choices}</div>
         </section>
       `);

@@ -4,7 +4,7 @@ import { createRunState } from "./createRunState";
 import { processCommand } from "./processCommand";
 import { captureTutorialSnapshot, getMissionReadiness, updateTutorialAfterCommand } from "./tutorial";
 import type { GameCommand } from "../types/commands";
-import type { RunState, SaveData } from "../types/gameTypes";
+import type { BotInstance, RunState, SaveData } from "../types/gameTypes";
 
 function createSaveData(tutorialCompleted = false): SaveData {
   return {
@@ -20,12 +20,12 @@ function createSaveData(tutorialCompleted = false): SaveData {
   };
 }
 
-function createBotStub() {
+function createBotStub(): BotInstance {
   return {
     id: "bot_stub",
     recipeId: "survey_harrier",
     name: "Survey Harrier",
-    role: "mining" as const,
+    role: "mining",
     color: 0xffffff,
     tags: ["survey"],
     hp: 24,
@@ -38,6 +38,7 @@ function createBotStub() {
     support: 0,
     range: 60,
     salvage: 1,
+    epicModules: [],
     cooldown: 0,
     contribution: {
       mined: 0,
@@ -139,4 +140,3 @@ describe("tutorial onboarding flow", () => {
     expect(state.resources.scrap).toBe(0);
   });
 });
-

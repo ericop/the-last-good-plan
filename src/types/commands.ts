@@ -1,11 +1,11 @@
-import type { ArtifactDefinition, DockPanelId, DoctrineId, ModuleId, UpgradeId } from "./gameTypes";
+import type { DockPanelId, DoctrineId, FabricationOptionId, UpgradeId } from "./gameTypes";
 
 export type GameCommand =
   | { type: "start_new_run" }
   | { type: "toggle_pause" }
   | { type: "toggle_execution_speed" }
   | { type: "set_doctrine"; doctrineId: DoctrineId }
-  | { type: "select_fabrication_module"; moduleId?: ModuleId }
+  | { type: "select_fabrication_module"; moduleId?: FabricationOptionId }
   | { type: "board_slot_pressed"; slotId: string }
   | { type: "merge_selected" }
   | { type: "spend_upgrade"; upgradeId: UpgradeId }
@@ -16,4 +16,4 @@ export type GameCommand =
   | { type: "advance_tutorial" }
   | { type: "skip_tutorial" }
   | { type: "replay_tutorial" }
-  | { type: "choose_reward"; artifactId: ArtifactDefinition["id"] };
+  | { type: "choose_reward"; rewardKind: "artifact" | "epic_module"; rewardId: string };

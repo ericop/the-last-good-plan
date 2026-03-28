@@ -1,7 +1,8 @@
+import { applyEpicModifiers, getEpicModuleById, getFabricationBaseModuleId, grantEpicModule, isEpicModuleId } from "../data/epicModuleRegistry";
 import { MODULE_DEFINITIONS } from "../data/modules";
 import { UPGRADE_DEFINITIONS } from "../data/upgrades";
 import type { GameCommand } from "../types/commands";
-import type { BotInstance, ModuleId, RunState, SaveData } from "../types/gameTypes";
+import type { BotInstance, ModuleId, RunState, SaveData, ShipSlot } from "../types/gameTypes";
 import { createRunState, prepareExecutionState, resetForNextCycle } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
@@ -16,6 +17,7 @@ import {
   makeBotId,
   subtractFromPool,
 } from "./utils";
+
 function recalculateShipStats(state: RunState): void {
   const defenseLevel = state.ship.upgrades.defense_grid;
   state.ship.maxHull = 120 + defenseLevel * 10;
@@ -24,13 +26,13 @@ function recalculateShipStats(state: RunState): void {
   state.ship.shield = Math.min(state.ship.maxShield, state.ship.shield + 12);
 }
 
-function createBotFromRecipe(recipeId: string, index: number): BotInstance {
+function createBotFromRecipe(recipeId: string, index: number, epicModuleIds: string[] = []): BotInstance {
   const recipe = getRecipeById(recipeId);
   if (!recipe) {
     throw new Error(`Missing recipe ${recipeId}`);
   }
   const position = getBotStagingPosition(index);
-  return {
+  const bot: BotInstance = {
     id: makeBotId(),
     recipeId: recipe.id,
     name: recipe.resultName,
@@ -47,6 +49,7 @@ function createBotFromRecipe(recipeId: string, index: number): BotInstance {
     support: recipe.stats.support,
     range: recipe.stats.range,
     salvage: recipe.stats.salvage,
+    epicModules: [],
     cooldown: 0,
     contribution: {
       mined: 0,
@@ -55,9 +58,11 @@ function createBotFromRecipe(recipeId: string, index: number): BotInstance {
       salvage: 0,
     },
   };
+  applyEpicModifiers(bot, epicModuleIds.filter((value): value is BotInstance["epicModules"][number] => isEpicModuleId(value)));
+  return bot;
 }
 
-function getSelectedMergeModules(state: RunState): ModuleId[] | undefined {
+function getSelectedMergeSlots(state: RunState): ShipSlot[] | undefined {
   const slots = state.ui.selectedSlotIds
     .map((slotId) => getSlotById(state.ship.slots, slotId))
     .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot));
@@ -65,6 +70,14 @@ function getSelectedMergeModules(state: RunState): ModuleId[] | undefined {
     return undefined;
   }
   if (slots.some((slot) => !slot.moduleId)) {
+    return undefined;
+  }
+  return slots;
+}
+
+function getSelectedMergeModules(state: RunState): ModuleId[] | undefined {
+  const slots = getSelectedMergeSlots(state);
+  if (!slots) {
     return undefined;
   }
   return slots.map((slot) => slot.moduleId!);
@@ -125,17 +138,32 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       if (!slot) {
         return state;
       }
-      const selectedModuleId = state.ui.selectedFabricationModuleId;
-      if (selectedModuleId && !slot.moduleId) {
-        const cost = MODULE_DEFINITIONS[selectedModuleId].fabricationCost;
+      const selectedFabricationId = state.ui.selectedFabricationModuleId;
+      if (selectedFabricationId && !slot.moduleId) {
+        if (isEpicModuleId(selectedFabricationId)) {
+          if (state.ship.epicInventory[selectedFabricationId] <= 0) {
+            addMessage(state, "That Epic Module core is not currently in your fabrication pool.");
+            return state;
+          }
+          const epic = getEpicModuleById(selectedFabricationId);
+          state.ship.epicInventory[selectedFabricationId] -= 1;
+          slot.moduleId = epic.baseModuleId;
+          slot.epicModuleId = epic.id;
+          state.missionPrep.modulesPlacedThisMission += 1;
+          addMessage(state, `${epic.name} installed in ${slot.label}.`);
+          return state;
+        }
+
+        const cost = MODULE_DEFINITIONS[selectedFabricationId].fabricationCost;
         if (!canAfford(state.resources, cost)) {
           addMessage(state, "Insufficient resources for that module.");
           return state;
         }
         subtractFromPool(state.resources, cost);
-        slot.moduleId = selectedModuleId;
+        slot.moduleId = getFabricationBaseModuleId(selectedFabricationId);
+        slot.epicModuleId = undefined;
         state.missionPrep.modulesPlacedThisMission += 1;
-        addMessage(state, `${MODULE_DEFINITIONS[selectedModuleId].name} placed in ${slot.label}.`);
+        addMessage(state, `${MODULE_DEFINITIONS[selectedFabricationId].name} placed in ${slot.label}.`);
         return state;
       }
 
@@ -156,8 +184,9 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
         return state;
       }
       const selectedSlotIds = state.ui.selectedSlotIds;
-      const modules = getSelectedMergeModules(state);
-      if (!modules || selectedSlotIds.length < 2 || selectedSlotIds.length > 3) {
+      const selectedSlots = getSelectedMergeSlots(state);
+      const modules = selectedSlots?.map((slot) => slot.moduleId!) ?? undefined;
+      if (!selectedSlots || !modules || selectedSlotIds.length < 2 || selectedSlotIds.length > 3) {
         addMessage(state, "Select two or three placed modules to create a bot.");
         return state;
       }
@@ -175,16 +204,25 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       if (entryBefore === "unknown") {
         state.simulation.cycleStats.discoveries.push(preview.recipe.resultName);
       }
+      const epicModuleIds = selectedSlots
+        .map((slot) => slot.epicModuleId)
+        .filter((epicId): epicId is NonNullable<typeof epicId> => Boolean(epicId));
       selectedSlotIds.forEach((slotId) => {
         const slot = getSlotById(state.ship.slots, slotId);
         if (slot) {
           slot.moduleId = undefined;
+          slot.epicModuleId = undefined;
         }
       });
-      const bot = createBotFromRecipe(preview.recipe.id, state.ship.bots.length);
+      const bot = createBotFromRecipe(preview.recipe.id, state.ship.bots.length, epicModuleIds);
       state.ship.bots.push(bot);
       state.ui.selectedSlotIds = [];
-      addMessage(state, `${preview.recipe.resultName} assembled. The merge is permanent.`);
+      addMessage(
+        state,
+        epicModuleIds.length > 0
+          ? `${preview.recipe.resultName} assembled with epic hardware. The merge is permanent.`
+          : `${preview.recipe.resultName} assembled. The merge is permanent.`,
+      );
       return state;
     }
     case "spend_upgrade": {
@@ -245,24 +283,34 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       if (!state.pendingReward) {
         return state;
       }
-      if (state.ship.artifacts.includes(command.artifactId)) {
-        state.pendingReward = undefined;
-        state.paused = false;
-        return state;
+      if (command.rewardKind === "artifact") {
+        if (state.ship.artifacts.includes(command.rewardId)) {
+          state.pendingReward = undefined;
+          state.paused = false;
+          return state;
+        }
+        const artifact = getArtifactById(command.rewardId);
+        if (!artifact) {
+          return state;
+        }
+        state.ship.artifacts.push(artifact.id);
+        state.simulation.cycleStats.rewardsEarned.push(artifact.name);
+        state.meta.totalArtifactsRecovered += 1;
+        addMessage(state, `${artifact.name} installed.`);
+      } else {
+        if (!isEpicModuleId(command.rewardId)) {
+          return state;
+        }
+        const epic = getEpicModuleById(command.rewardId);
+        grantEpicModule(state, epic.id);
+        state.simulation.cycleStats.rewardsEarned.push(epic.name);
+        addMessage(state, `${epic.name} added to the fabrication pool.`);
       }
-      const artifact = getArtifactById(command.artifactId);
-      if (!artifact) {
-        return state;
-      }
-      state.ship.artifacts.push(artifact.id);
-      state.simulation.cycleStats.rewardsEarned.push(artifact.name);
-      state.meta.totalArtifactsRecovered += 1;
       state.pendingReward = undefined;
       if (state.phase === "execution") {
         state.paused = false;
       }
       recalculateShipStats(state);
-      addMessage(state, `${artifact.name} installed.`);
       return state;
     }
     case "continue_from_results": {

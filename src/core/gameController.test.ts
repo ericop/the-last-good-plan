@@ -4,7 +4,7 @@ import { createRunState } from "./createRunState";
 import { stepSimulation } from "./simulation";
 import { pickRewardChoices } from "./utils";
 import { createDefaultDiscoveryLog } from "./discovery";
-import type { SaveData } from "../types/gameTypes";
+import type { BotInstance, SaveData } from "../types/gameTypes";
 
 function createSaveData(tutorialCompleted = false): SaveData {
   return {
@@ -17,6 +17,36 @@ function createSaveData(tutorialCompleted = false): SaveData {
     onboarding: {
       tutorialCompleted,
     },
+  };
+}
+
+function createBotStub(overrides: Partial<BotInstance> = {}): BotInstance {
+  return {
+    id: "bot_stub",
+    recipeId: "survey_harrier",
+    name: "Survey Harrier",
+    role: "mining",
+    color: 0xffffff,
+    tags: ["solar", "mining"],
+    hp: 20,
+    maxHp: 20,
+    x: 0,
+    y: 0,
+    speed: 1,
+    mining: 1,
+    attack: 1,
+    support: 0,
+    range: 1,
+    salvage: 0,
+    epicModules: [],
+    cooldown: 0,
+    contribution: {
+      mined: 0,
+      damage: 0,
+      healing: 0,
+      salvage: 0,
+    },
+    ...overrides,
   };
 }
 
@@ -57,31 +87,16 @@ describe("game controller updates", () => {
     const state = createRunState(createSaveData(true), "execution");
     state.tutorial.active = false;
     state.ship.bots = [
-      {
+      createBotStub({
         id: "bot_boss_test",
-        recipeId: "survey_harrier",
-        name: "Survey Harrier",
         role: "defense",
-        color: 0xffffff,
         tags: ["defense"],
-        hp: 20,
-        maxHp: 20,
         x: 300,
         y: 300,
-        speed: 1,
         mining: 0,
         attack: 500,
-        support: 0,
         range: 200,
-        salvage: 0,
-        cooldown: 0,
-        contribution: {
-          mined: 0,
-          damage: 0,
-          healing: 0,
-          salvage: 0,
-        },
-      },
+      }),
     ];
     state.simulation.enemies = [
       {
@@ -114,31 +129,16 @@ describe("game controller updates", () => {
     state.tutorial.active = false;
     state.simulation.objective.integrity = 0;
     state.ship.bots = [
-      {
+      createBotStub({
         id: "bot_boss_test_done",
-        recipeId: "survey_harrier",
-        name: "Survey Harrier",
         role: "defense",
-        color: 0xffffff,
         tags: ["defense"],
-        hp: 20,
-        maxHp: 20,
         x: 300,
         y: 300,
-        speed: 1,
         mining: 0,
         attack: 500,
-        support: 0,
         range: 200,
-        salvage: 0,
-        cooldown: 0,
-        contribution: {
-          mined: 0,
-          damage: 0,
-          healing: 0,
-          salvage: 0,
-        },
-      },
+      }),
     ];
     state.simulation.enemies = [
       {
@@ -175,31 +175,7 @@ describe("game controller updates", () => {
     controller.dispatch({ type: "start_new_run" });
     const state = controller.getState();
     state.missionPrep.modulesPlacedThisMission = 3;
-    state.ship.bots.push({
-      id: "bot_stub",
-      recipeId: "survey_harrier",
-      name: "Survey Harrier",
-      role: "mining",
-      color: 0xffffff,
-      tags: ["solar", "mining"],
-      hp: 20,
-      maxHp: 20,
-      x: 0,
-      y: 0,
-      speed: 1,
-      mining: 1,
-      attack: 1,
-      support: 0,
-      range: 1,
-      salvage: 0,
-      cooldown: 0,
-      contribution: {
-        mined: 0,
-        damage: 0,
-        healing: 0,
-        salvage: 0,
-      },
-    });
+    state.ship.bots.push(createBotStub());
 
     controller.dispatch({ type: "begin_execution" });
     controller.dispatch({ type: "toggle_execution_speed" });
@@ -209,8 +185,3 @@ describe("game controller updates", () => {
     expect(controller.getState().simulation.elapsed).toBe(2);
   });
 });
-
-
-
-
-

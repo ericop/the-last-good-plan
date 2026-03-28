@@ -1,4 +1,4 @@
-﻿import type { EnemyDefinition, EnemyKind } from "../types/gameTypes";
+import type { EnemyDefinition, EnemyKind } from "../types/gameTypes";
 
 export const ENEMY_DEFINITIONS: Record<EnemyKind, EnemyDefinition> = {
   scavenger: {
@@ -20,5 +20,15 @@ export const ENEMY_DEFINITIONS: Record<EnemyKind, EnemyDefinition> = {
     attack: 18,
     range: 112,
     scrapReward: 32,
+  },
+  boss: {
+    kind: "boss",
+    name: "Ancient Warform",
+    color: 0xffd27a,
+    hp: 520,
+    speed: 10,
+    attack: 24,
+    range: 132,
+    scrapReward: 48,
   },
 };
