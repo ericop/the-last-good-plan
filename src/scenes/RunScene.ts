@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import type { GameController } from "../core/gameController";
 import { getPhaseLabel } from "../core/tutorial";
 import { MODULE_DEFINITIONS } from "../data/modules";
-import { BOARD_ORIGIN, GAME_HEIGHT, GAME_WIDTH, OBJECTIVE_POINT, SHIP_CENTER, SLOT_GAP, SLOT_SIZE } from "../game/constants";
+import { GAME_HEIGHT, GAME_WIDTH, SHIP_CENTER, SLOT_SIZE } from "../game/constants";
+import { createStarfield, drawAmbientPanel, drawMechanicalHalo, type StarfieldHandle } from "../game/effects/ambientVisuals";
 import type { BotInstance, RunState, ShipSlot } from "../types/gameTypes";
 
 export class RunScene extends Phaser.Scene {
@@ -16,7 +17,8 @@ export class RunScene extends Phaser.Scene {
   private objectiveText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
   private overlayText!: Phaser.GameObjects.Text;
-  private stars: Array<{ x: number; y: number; size: number; alpha: number }> = [];
+  private starfield!: StarfieldHandle;
+  private visualTime = 0;
 
   constructor() {
     super("run");
@@ -25,12 +27,10 @@ export class RunScene extends Phaser.Scene {
   create(): void {
     this.controller = this.registry.get("controller") as GameController;
     this.graphics = this.add.graphics();
-    this.stars = Array.from({ length: 74 }, () => ({
-      x: Phaser.Math.Between(0, GAME_WIDTH),
-      y: Phaser.Math.Between(0, GAME_HEIGHT),
-      size: Phaser.Math.FloatBetween(0.7, 2.2),
-      alpha: Phaser.Math.FloatBetween(0.15, 0.6),
-    }));
+    this.starfield = createStarfield(this, { width: GAME_WIDTH, height: GAME_HEIGHT });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.starfield.destroy();
+    });
 
     const state = this.controller.getState();
     for (const slot of state.ship.slots) {
@@ -111,7 +111,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    this.controller.update(delta / 1000);
+    const dt = delta / 1000;
+    this.visualTime += dt;
+    this.starfield.update(dt);
+    this.controller.update(dt);
     const state = this.controller.getState();
     this.renderState(state);
   }
@@ -131,23 +134,19 @@ export class RunScene extends Phaser.Scene {
   private drawBackground(): void {
     this.graphics.fillStyle(0x061018, 1);
     this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    for (const star of this.stars) {
-      this.graphics.fillStyle(0xd8f1ff, star.alpha);
-      this.graphics.fillCircle(star.x, star.y, star.size);
-    }
+    this.starfield.draw(this.graphics);
+    this.graphics.fillStyle(0x08131b, 0.18);
+    this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
   }
 
   private drawPlayfield(state: RunState): void {
-    this.graphics.lineStyle(2, 0x2c5871, 0.9);
-    this.graphics.fillStyle(0x0b1a25, 0.95);
-    this.graphics.fillRoundedRect(24, 52, 420, 520, 18);
-    this.graphics.strokeRoundedRect(24, 52, 420, 520, 18);
+    const time = this.visualTime;
 
-    this.graphics.fillStyle(0x0a1d2b, 0.95);
-    this.graphics.fillRoundedRect(470, 52, 466, 520, 18);
-    this.graphics.strokeRoundedRect(470, 52, 466, 520, 18);
+    drawAmbientPanel(this.graphics, 24, 52, 420, 520, 18, time, 0x4f7d8d);
+    drawAmbientPanel(this.graphics, 470, 52, 466, 520, 18, time + 1.2, 0x4f7d8d);
+    drawMechanicalHalo(this.graphics, SHIP_CENTER.x, SHIP_CENTER.y, time);
 
-    this.graphics.lineStyle(2, 0x4f7d8d, 0.7);
+    this.graphics.lineStyle(2, 0x4f7d8d, 0.3);
     this.graphics.strokeCircle(SHIP_CENTER.x, SHIP_CENTER.y, 118);
     this.graphics.strokeCircle(SHIP_CENTER.x, SHIP_CENTER.y, 134);
 
@@ -177,17 +176,11 @@ export class RunScene extends Phaser.Scene {
     );
     this.graphics.strokePath();
 
-    this.graphics.fillStyle(0x112636, 0.9);
+    this.graphics.fillStyle(0x112636, 0.92);
     this.graphics.fillCircle(SHIP_CENTER.x, SHIP_CENTER.y, 82);
 
-    this.graphics.fillStyle(0x122f40, 1);
-    this.graphics.fillRoundedRect(620, 112, 232, 118, 18);
-    this.graphics.lineStyle(2, 0x5ea8c9, 0.8);
-    this.graphics.strokeRoundedRect(620, 112, 232, 118, 18);
-
-    this.graphics.fillStyle(0x0d2330, 1);
-    this.graphics.fillRoundedRect(720, 394, 196, 166, 16);
-    this.graphics.strokeRoundedRect(720, 394, 196, 166, 16);
+    drawAmbientPanel(this.graphics, 620, 112, 232, 118, 18, time + 2.1, 0x5ea8c9);
+    drawAmbientPanel(this.graphics, 720, 394, 196, 166, 16, time + 3.2, 0x5ea8c9);
   }
 
   private drawSlots(state: RunState): void {
@@ -380,15 +373,15 @@ export class RunScene extends Phaser.Scene {
     if (state.tutorial.active) {
       switch (state.tutorial.stepId) {
         case "place_solar_collector":
-          return "Place the Solar Collector in any empty slot on the left board.";
+          return "Click Solar Collector, then click an empty ship slot, like C3.";
         case "place_mineral_drill":
           return "Place the Mineral Drill. You will merge it with the Solar Collector in the next step.";
         case "place_third_module":
           return "Place one more module to round out the ship. Shield Emitter or Cargo Core are both good tutorial picks.";
         case "merge_bot":
-          return "Select the Solar Collector and Mineral Drill, then press Create Bot in the right panel.";
+          return "Select the Solar Collector and Mineral Drill, then press Create Bot in the Bots tab.";
         case "select_doctrine":
-          return "Balanced is recommended for the first mission. Click it once in the right panel.";
+          return "Balanced is recommended for the first mission. Click it once in the Doctrine tab.";
         case "start_mission":
           return "The big Start Mission button is ready when you are.";
         case "mission_running":

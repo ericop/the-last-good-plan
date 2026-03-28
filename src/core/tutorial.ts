@@ -36,7 +36,7 @@ const TUTORIAL_STEP_VIEWS: Record<TutorialStepId, TutorialStepView> = {
   },
   place_solar_collector: {
     title: "Step 1: Place Solar",
-    body: "Click Solar Collector, then place it in any empty ship slot.",
+    body: "Click Solar Collector, then click an empty ship slot, like C3.",
     targetSelectors: ["[data-tutorial-target='module-solar_collector']", "[data-tutorial-target='ship-board']"],
   },
   place_mineral_drill: {

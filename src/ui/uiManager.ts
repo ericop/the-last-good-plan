@@ -7,6 +7,7 @@ import { getDiscoveryDescriptor, getMergePreviewFromModules } from "../core/disc
 import { getMissionReadiness, getPhaseLabel, getTutorialStepView } from "../core/tutorial";
 import { getArtifactById, getBotCapacity, getSlotById } from "../core/utils";
 import type { DockPanelId, ModuleId, RunState, UpgradeId } from "../types/gameTypes";
+import { applyButtonHoverEffect, applyPanelGlow, pulseCounter } from "./effects";
 
 const DOCK_ITEMS: Array<{ id: DockPanelId; label: string }> = [
   { id: "ship", label: "Ship" },
@@ -32,7 +33,7 @@ export class UIManager {
   private lastDockPanelHtml = "";
   private lastMissionBarHtml = "";
   private lastModalHtml = "";
-
+  private lastResourceSnapshot?: Record<"solar" | "minerals" | "scrap", number>;
   constructor(private root: HTMLElement, private controller: GameController) {
     root.innerHTML = `
       <div class="app-shell" id="app-shell">
@@ -153,6 +154,8 @@ export class UIManager {
     this.setSectionHtml("missionBar", this.missionBar, state.phase === "menu" ? "" : this.renderMissionBar(state));
     this.setSectionHtml("modal", this.modalLayer, this.renderModals(state));
     this.syncTutorialHighlights(state);
+    this.applyAmbientEffects();
+    this.pulseChangedResources(state);
   }
 
   private setSectionHtml(
@@ -208,17 +211,17 @@ export class UIManager {
         <strong>${getPhaseLabel(state.phase)}</strong>
         <span data-tutorial-target="mission-status">${DOCTRINES[state.doctrine].name}</span>
       </div>
-      <div class="hud-card resource solar">
+      <div class="hud-card resource solar" data-resource-id="solar">
         <span class="eyebrow">Solar</span>
         <strong>${Math.round(state.resources.solar)}</strong>
         <span>stored</span>
       </div>
-      <div class="hud-card resource minerals">
+      <div class="hud-card resource minerals" data-resource-id="minerals">
         <span class="eyebrow">Minerals</span>
         <strong>${Math.round(state.resources.minerals)}</strong>
         <span>stored</span>
       </div>
-      <div class="hud-card resource scrap">
+      <div class="hud-card resource scrap" data-resource-id="scrap">
         <span class="eyebrow">Scrap</span>
         <strong>${Math.round(state.resources.scrap)}</strong>
         <span>stored</span>
@@ -560,7 +563,7 @@ export class UIManager {
             <strong>Start Mission</strong>
             <span class="mission-hint">${readiness.ready ? "Your ship is ready to run itself." : readiness.reason}</span>
           </div>
-          <button class="mission-button" data-action="begin-execution" data-tutorial-target="start-mission" ${readiness.ready ? "" : "disabled"}>
+          <button class="mission-button primary-cta ${readiness.ready ? "ready" : ""}" data-action="begin-execution" data-tutorial-target="start-mission" ${readiness.ready ? "" : "disabled"}>
             Start Mission
           </button>
         </div>
@@ -693,6 +696,50 @@ export class UIManager {
     }
 
     return layers.join("");
+  }
+
+  private applyAmbientEffects(): void {
+    this.root
+      .querySelectorAll<HTMLElement>(".hud-card, .dock-nav, .dock-panel, .panel-block, .canvas-shell, .mission-bar, .modal-card, .tutorial-card")
+      .forEach((element) => {
+        applyPanelGlow(element);
+      });
+
+    this.root.querySelectorAll<HTMLElement>("button").forEach((button) => {
+      applyButtonHoverEffect(button, {
+        primary: button.matches(".primary-cta") || button.dataset.action === "begin-execution",
+      });
+    });
+  }
+
+  private pulseChangedResources(state: RunState): void {
+    if (state.phase === "menu") {
+      this.lastResourceSnapshot = undefined;
+      return;
+    }
+
+    const nextSnapshot = {
+      solar: Math.round(state.resources.solar),
+      minerals: Math.round(state.resources.minerals),
+      scrap: Math.round(state.resources.scrap),
+    };
+
+    if (!this.lastResourceSnapshot) {
+      this.lastResourceSnapshot = nextSnapshot;
+      return;
+    }
+
+    for (const resourceId of Object.keys(nextSnapshot) as Array<keyof typeof nextSnapshot>) {
+      if (nextSnapshot[resourceId] === this.lastResourceSnapshot[resourceId]) {
+        continue;
+      }
+      const card = this.root.querySelector<HTMLElement>(`[data-resource-id="${resourceId}"]`);
+      if (card) {
+        pulseCounter(card);
+      }
+    }
+
+    this.lastResourceSnapshot = nextSnapshot;
   }
 
   private syncTutorialHighlights(state: RunState): void {
