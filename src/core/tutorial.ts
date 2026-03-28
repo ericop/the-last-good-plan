@@ -195,7 +195,7 @@ export function isTutorialCommandAllowed(state: RunState, command: GameCommand):
   }
 
   if (command.type === "set_dock_panel") {
-    return ["ship", "build", "bots", "doctrine", "settings"].includes(command.panelId);
+    return ["ship", "build", "bots", "doctrine", "log"].includes(command.panelId);
   }
 
   switch (state.tutorial.stepId) {
@@ -328,7 +328,3 @@ export function updateTutorialAfterSimulation(state: RunState, before: TutorialS
     setTutorialStep(state, "mission_results");
   }
 }
-
-
-
-

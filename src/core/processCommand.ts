@@ -75,9 +75,7 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
     case "start_new_run": {
       return createRunState(saveData, "planning");
     }
-    case "return_to_menu": {
-      return createRunState(saveData, "menu");
-    }
+
     case "toggle_pause": {
       if (state.phase === "execution") {
         state.paused = !state.paused;
@@ -277,13 +275,3 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return state;
   }
 }
-
-
-
-
-
-
-
-
-
-

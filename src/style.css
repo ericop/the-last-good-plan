@@ -95,6 +95,11 @@ h3 {
   line-height: 1.05;
 }
 
+.threat-headline {
+  font-size: clamp(13px, 0.92vw, 16px);
+  line-height: 1.05;
+}
+
 .hud-card.resource.solar strong {
   color: var(--accent-solar);
 }
@@ -677,7 +682,25 @@ button:disabled,
 
 @media (max-width: 760px) {
   .hud-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hud-card {
+    min-height: 48px;
+    padding: 5px 8px;
+  }
+
+  .hud-card strong {
+    font-size: 14px;
+  }
+
+  .threat-headline {
+    font-size: 12px;
+    line-height: 1.1;
+  }
+
+  .hud-card span {
+    font-size: 10px;
   }
 
   .module-grid.compact,
@@ -752,7 +775,3 @@ button:disabled,
     padding: 12px 14px;
   }
 }
-
-
-
-

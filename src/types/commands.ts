@@ -16,5 +16,4 @@ export type GameCommand =
   | { type: "advance_tutorial" }
   | { type: "skip_tutorial" }
   | { type: "replay_tutorial" }
-  | { type: "choose_reward"; artifactId: ArtifactDefinition["id"] }
-  | { type: "return_to_menu" };
+  | { type: "choose_reward"; artifactId: ArtifactDefinition["id"] };

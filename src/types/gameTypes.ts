@@ -14,7 +14,7 @@ export type BotRole = "mining" | "defense" | "support" | "hybrid";
 export type ArtifactType = "passive" | "doctrine" | "merge_support";
 export type RewardSource = "moon" | "boss";
 export type EnemyKind = "scavenger" | "mini_boss";
-export type DockPanelId = "ship" | "build" | "bots" | "doctrine" | "log" | "upgrades" | "settings";
+export type DockPanelId = "ship" | "build" | "bots" | "doctrine" | "log";
 export type TutorialStepId =
   | "intro"
   | "place_solar_collector"
@@ -305,11 +305,3 @@ export interface SaveData {
   meta: MetaProgress;
   onboarding: OnboardingProgress;
 }
-
-
-
-
-
-
-
-

@@ -14,8 +14,6 @@ const DOCK_ITEMS: Array<{ id: DockPanelId; label: string }> = [
   { id: "bots", label: "Bots" },
   { id: "doctrine", label: "Doctrine" },
   { id: "log", label: "Log" },
-  { id: "upgrades", label: "Upgrades" },
-  { id: "settings", label: "Settings" },
 ];
 
 function renderModuleSignature(modules: readonly ModuleId[]): string {
@@ -142,9 +140,6 @@ export class UIManager {
       case "replay-tutorial":
         this.controller.dispatch({ type: "replay_tutorial" });
         break;
-      case "return-menu":
-        this.controller.dispatch({ type: "return_to_menu" });
-        break;
       default:
         break;
     }
@@ -235,7 +230,7 @@ export class UIManager {
       </div>
       <div class="hud-card wide">
         <span class="eyebrow">Threat Preview</span>
-        <strong>${nextThreatText}</strong>
+        <strong class="threat-headline">${nextThreatText}</strong>
         <span>${Math.max(0, state.simulation.upcomingThreats.length - state.simulation.threatCursor)} waves queued</span>
       </div>
     `;
@@ -263,10 +258,6 @@ export class UIManager {
         return this.renderBotsPanel(state);
       case "doctrine":
         return this.renderDoctrinePanel(state);
-      case "upgrades":
-        return this.renderUpgradePanel(state);
-      case "settings":
-        return this.renderSettingsPanel(state);
       case "ship":
       default:
         return this.renderShipPanel(state);
@@ -284,6 +275,7 @@ export class UIManager {
         : "Nothing selected yet";
 
     return `
+      ${this.renderShipUpgradePanel(state)}
       <div class="panel-block emphasis-block">
         <span class="eyebrow">Next Step</span>
         <strong>${tutorialView ? tutorialView.title : this.getGeneralGuidanceTitle(state)}</strong>
@@ -305,6 +297,7 @@ export class UIManager {
           ${state.simulation.messageLog.slice(-5).map((entry) => `<div class="message-entry">${entry}</div>`).join("")}
         </div>
       </div>
+      ${this.renderTutorialPanel(state)}
     `;
   }
 
@@ -391,12 +384,12 @@ export class UIManager {
     `;
   }
 
-  private renderUpgradePanel(state: RunState): string {
+  private renderShipUpgradePanel(state: RunState): string {
     return `
       <div class="panel-block">
-        <span class="eyebrow">Upgrade Nodes</span>
-        <strong>Spend resources on simple permanent support</strong>
-        <p>Mining, defense, and support are kept here so they never crowd the main build flow.</p>
+        <span class="eyebrow">Ship Upgrades</span>
+        <strong>Strengthen the plan</strong>
+        <p>Upgrade mining, defense, and support here without leaving the ship overview.</p>
       </div>
       <div class="scroll-stack">
         ${Object.values(UPGRADE_DEFINITIONS)
@@ -418,17 +411,16 @@ export class UIManager {
     `;
   }
 
-  private renderSettingsPanel(state: RunState): string {
+  private renderTutorialPanel(state: RunState): string {
     return `
       <div class="panel-block">
-        <span class="eyebrow">Settings</span>
-        <strong>Keep the run readable</strong>
-        <p>${state.tutorial.active ? "Need less guidance? You can skip the tutorial here." : "Replay the tutorial any time or head back to the menu."}</p>
+        <span class="eyebrow">Tutorial</span>
+        <strong>${state.tutorial.active ? "Guidance is on" : "Need a refresher?"}</strong>
+        <p>${state.tutorial.active ? "You can skip the tutorial here at any time." : "Replay the tutorial any time from the ship tab."}</p>
       </div>
       <div class="button-stack">
         ${state.tutorial.active ? `<button class="ui-button secondary" data-action="skip-tutorial">Skip Tutorial</button>` : `<button class="ui-button secondary" data-action="replay-tutorial">Replay Tutorial</button>`}
         ${state.phase === "execution" ? `<div class="button-stack"><button class="ui-button secondary ${state.executionSpeed === 2 ? "selected" : ""}" data-action="toggle-fast-forward">2x FastForward</button><button class="ui-button secondary" data-action="toggle-pause">${state.paused ? "Resume Mission" : "Pause Mission"}</button></div>` : ""}
-        ${state.tutorial.active ? "" : `<button class="ui-button secondary" data-action="return-menu">Return To Menu</button>`}
       </div>
     `;
   }
@@ -725,16 +717,8 @@ export class UIManager {
 
   private getVisibleDockPanel(state: RunState): DockPanelId {
     const requested = state.ui.activeDockPanel;
-    if (requested === "settings" && !this.isDockPanelLocked(state, requested)) {
-      return requested;
-    }
-
-    const tutorialPanel = this.getTutorialDockPanel(state);
-    if (tutorialPanel) {
-      return tutorialPanel;
-    }
     if (this.isDockPanelLocked(state, requested)) {
-      return state.phase === "planning" ? "build" : "ship";
+      return this.getTutorialDockPanel(state) ?? (state.phase === "planning" ? "build" : "ship");
     }
     return requested;
   }
@@ -765,7 +749,7 @@ export class UIManager {
     }
 
     const tutorialPanel = this.getTutorialDockPanel(state);
-    return panelId !== "settings" && panelId !== tutorialPanel;
+    return panelId !== "ship" && panelId !== tutorialPanel;
   }
 
   private getGeneralGuidanceTitle(state: RunState): string {
