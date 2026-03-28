@@ -165,7 +165,6 @@ export function drawAmbientPanel(
   height: number,
   radius: number,
   time: number,
-  accentColor: number,
 ): void {
   const glowAlpha = 0.1 + Math.sin(time * 0.18) * 0.03;
   graphics.fillStyle(0x0c1822, 0.34 + glowAlpha);
@@ -177,7 +176,7 @@ export function drawAmbientPanel(
   graphics.fillStyle(0x153247, 0.18);
   graphics.fillRoundedRect(x + 8, y + 8, width - 16, Math.max(18, height * 0.28), Math.max(10, radius - 4));
 
-  graphics.lineStyle(2, accentColor, 0.66);
+  graphics.lineStyle(1, 0x243543, 0.82);
   graphics.strokeRoundedRect(x, y, width, height, radius);
 
   const rivets = [

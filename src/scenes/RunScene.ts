@@ -56,7 +56,7 @@ export class RunScene extends Phaser.Scene {
       this.slotCodeTexts.set(slot.id, codeText);
     }
 
-    this.threatTitleText = this.add.text(736, 406, "Waves", {
+    this.threatTitleText = this.add.text(728, 372, "Waves", {
       fontFamily: "Trebuchet MS, Verdana, sans-serif",
       fontSize: "14px",
       color: "#d3edf6",
@@ -64,11 +64,11 @@ export class RunScene extends Phaser.Scene {
 
     for (let index = 0; index < 4; index += 1) {
       this.threatTexts.push(
-        this.add.text(736, 434 + index * 32, "", {
+        this.add.text(728, 400 + index * 30, "", {
           fontFamily: "Trebuchet MS, Verdana, sans-serif",
-          fontSize: "13px",
+          fontSize: "12px",
           color: "#f7dba0",
-          wordWrap: { width: 168 },
+          wordWrap: { width: 176 },
         }),
       );
     }
@@ -142,8 +142,8 @@ export class RunScene extends Phaser.Scene {
   private drawPlayfield(state: RunState): void {
     const time = this.visualTime;
 
-    drawAmbientPanel(this.graphics, 24, 52, 420, 520, 18, time, 0x4f7d8d);
-    drawAmbientPanel(this.graphics, 470, 52, 466, 520, 18, time + 1.2, 0x4f7d8d);
+    drawAmbientPanel(this.graphics, 24, 52, 420, 520, 18, time);
+    drawAmbientPanel(this.graphics, 470, 52, 466, 520, 18, time + 1.2);
     drawMechanicalHalo(this.graphics, SHIP_CENTER.x, SHIP_CENTER.y, time);
 
     this.graphics.lineStyle(2, 0x4f7d8d, 0.3);
@@ -179,8 +179,8 @@ export class RunScene extends Phaser.Scene {
     this.graphics.fillStyle(0x112636, 0.92);
     this.graphics.fillCircle(SHIP_CENTER.x, SHIP_CENTER.y, 82);
 
-    drawAmbientPanel(this.graphics, 620, 112, 232, 118, 18, time + 2.1, 0x5ea8c9);
-    drawAmbientPanel(this.graphics, 720, 394, 196, 166, 16, time + 3.2, 0x5ea8c9);
+    drawAmbientPanel(this.graphics, 620, 112, 232, 118, 18, time + 2.1);
+    drawAmbientPanel(this.graphics, 712, 356, 208, 182, 16, time + 3.2);
   }
 
   private drawSlots(state: RunState): void {
