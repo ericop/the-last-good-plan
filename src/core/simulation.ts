@@ -85,8 +85,12 @@ function destroyEnemy(state: RunState, enemy: EnemyInstance): boolean {
 
   if (enemy.kind === "mini_boss" && !state.simulation.bossDefeated) {
     state.simulation.bossDefeated = true;
-    state.simulation.duration += 10;
-    addMessage(state, "Mini-boss broken. Ancient chest recovered. Harvest window extended by 10s.");
+    if (state.simulation.objective.integrity > 0) {
+      state.simulation.duration += 10;
+      addMessage(state, "Mini-boss broken. Ancient chest recovered. Harvest window extended by 10s.");
+    } else {
+      addMessage(state, "Mini-boss broken. Ancient chest recovered.");
+    }
     offerReward(state, "boss");
     return true;
   }
@@ -401,6 +405,7 @@ export function stepSimulation(state: RunState, dt: number): boolean {
 
   return majorUpdate;
 }
+
 
 
 
