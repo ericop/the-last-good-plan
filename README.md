@@ -1,10 +1,23 @@
 # The Last Good Plan
 
-The Last Good Plan is a Phaser 3 + TypeScript + Vite MVP for a calm, single-screen spaceship systems roguelike. You build a ship board during planning, fuse adjacent modules into autonomous bots, choose a doctrine, then watch the cycle resolve without twitch input.
+---
 
-## Try The Game Yourself
+## ?? Short Description
 
-Play it here: [https://ericop.github.io/the-last-good-plan/](https://ericop.github.io/the-last-good-plan/)
+Design a self-sustaining spaceship, commit to a plan, and watch it either hold... or fall apart in the silence of deep space.
+
+[Try the game yourself](https://ericop.github.io/the-last-good-plan/)
+
+## ?? About This Game
+
+The Last Good Plan is a calm system-building roguelike about designing a self-sustaining spaceship against the quiet pressures and unforgiving realities of life in deep space.
+
+You combine technology from your ship into autonomous, irreversible bots that operate on their own. Every merge is permanent. Every decision matters.
+
+There are no quick reactions here. No frantic clicks.
+Only the plan you chose... and what it becomes.
+
+Commit to a strategy, let your systems run, and watch your ship either stabilize into something brilliant... or slowly unravel.
 
 ## Features
 
