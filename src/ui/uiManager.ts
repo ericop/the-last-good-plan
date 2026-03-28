@@ -280,7 +280,7 @@ export class UIManager {
       .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot));
     const selectedText =
       selectedSlots.length > 0
-        ? selectedSlots.map((slot) => `${slot.label}${slot.moduleId ? ` � ${MODULE_DEFINITIONS[slot.moduleId].name}` : ""}`).join("<br>")
+        ? selectedSlots.map((slot) => `${slot.label}${slot.moduleId ? ` | ${MODULE_DEFINITIONS[slot.moduleId].name}` : ""}`).join("<br>")
         : "Nothing selected yet";
 
     return `
@@ -354,7 +354,7 @@ export class UIManager {
                 <article class="bot-card">
                   <strong>${bot.name}</strong>
                   <span>${bot.role} bot</span>
-                  <small>HP ${Math.round(bot.hp)}/${bot.maxHp} � Mine ${Math.round(bot.contribution.mined)} � Damage ${Math.round(bot.contribution.damage)}</small>
+                  <small>HP ${Math.round(bot.hp)}/${bot.maxHp} | Mine ${Math.round(bot.contribution.mined)} | Damage ${Math.round(bot.contribution.damage)}</small>
                 </article>
               `,
             )
@@ -484,7 +484,7 @@ export class UIManager {
                 <button class="module-card ${selected ? "selected" : ""}" data-action="fabricate" data-module="${module.id}" data-tutorial-target="module-${module.id}" ${disabled ? "disabled" : ""}>
                   <strong>${module.name}</strong>
                   <span>${module.description}</span>
-                  <small>${costParts.join(" � ")}</small>
+                  <small>${costParts.join(" | ")}</small>
                 </button>
               `;
             })
@@ -796,19 +796,3 @@ export class UIManager {
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

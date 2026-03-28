@@ -11,6 +11,7 @@ export class RunScene extends Phaser.Scene {
   private slotLabelTexts = new Map<string, Phaser.GameObjects.Text>();
   private slotCodeTexts = new Map<string, Phaser.GameObjects.Text>();
   private threatTexts: Phaser.GameObjects.Text[] = [];
+  private threatTitleText!: Phaser.GameObjects.Text;
   private phaseText!: Phaser.GameObjects.Text;
   private objectiveText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
@@ -55,12 +56,19 @@ export class RunScene extends Phaser.Scene {
       this.slotCodeTexts.set(slot.id, codeText);
     }
 
+    this.threatTitleText = this.add.text(736, 406, "Waves", {
+      fontFamily: "Trebuchet MS, Verdana, sans-serif",
+      fontSize: "14px",
+      color: "#d3edf6",
+    });
+
     for (let index = 0; index < 4; index += 1) {
       this.threatTexts.push(
-        this.add.text(772, 430 + index * 34, "", {
+        this.add.text(736, 434 + index * 32, "", {
           fontFamily: "Trebuchet MS, Verdana, sans-serif",
-          fontSize: "14px",
+          fontSize: "13px",
           color: "#f7dba0",
+          wordWrap: { width: 168 },
         }),
       );
     }
@@ -178,8 +186,8 @@ export class RunScene extends Phaser.Scene {
     this.graphics.strokeRoundedRect(620, 112, 232, 118, 18);
 
     this.graphics.fillStyle(0x0d2330, 1);
-    this.graphics.fillRoundedRect(744, 406, 160, 142, 16);
-    this.graphics.strokeRoundedRect(744, 406, 160, 142, 16);
+    this.graphics.fillRoundedRect(720, 394, 196, 166, 16);
+    this.graphics.strokeRoundedRect(720, 394, 196, 166, 16);
   }
 
   private drawSlots(state: RunState): void {
@@ -303,7 +311,7 @@ export class RunScene extends Phaser.Scene {
 
   private updateTexts(state: RunState): void {
     this.phaseText.setText(
-      `Cycle ${state.cycle} • ${getPhaseLabel(state.phase)} • Hull ${Math.round(state.ship.hull)}/${state.ship.maxHull} • Shield ${Math.round(state.ship.shield)}/${state.ship.maxShield}`,
+      `Cycle ${state.cycle} | ${getPhaseLabel(state.phase)} | Hull ${Math.round(state.ship.hull)}/${state.ship.maxHull} | Shield ${Math.round(state.ship.shield)}/${state.ship.maxShield}`,
     );
     this.objectiveText.setText(
       `Moon Objective\nIntegrity ${Math.max(0, Math.round(state.simulation.objective.integrity))}/${state.simulation.objective.maxIntegrity}`,
@@ -315,7 +323,7 @@ export class RunScene extends Phaser.Scene {
       const text = this.threatTexts[index];
       const spawned = index < state.simulation.threatCursor;
       const countdown = Math.max(0, wave.time - state.simulation.elapsed);
-      text.setText(spawned ? `${wave.label} • deployed` : `${wave.label} • ${countdown.toFixed(1)}s`);
+      text.setText(spawned ? `${wave.label} | deployed` : `${wave.label} | ${countdown.toFixed(1)}s`);
       text.setColor(spawned ? "#7ec9a9" : "#f7dba0");
     });
 
@@ -401,7 +409,3 @@ export class RunScene extends Phaser.Scene {
     return slots.find((slot) => slot.id === slotId);
   }
 }
-
-
-
-

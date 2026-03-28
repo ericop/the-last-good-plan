@@ -77,7 +77,7 @@ const TUTORIAL_STEP_VIEWS: Record<TutorialStepId, TutorialStepView> = {
   },
   mission_running: {
     title: "Mission Running",
-    body: "Your ship is now running automatically. Watch the bot mine, defend, and follow your doctrine.",
+    body: "Your ship is now running automatically. You can change doctrine during the mission, but each change costs 10% commitment. Watch the bot mine, defend, and follow your doctrine.",
     targetSelectors: ["[data-tutorial-target='ship-board']", "[data-tutorial-target='mission-status']"],
     continueLabel: "Keep Watching",
     requiresContinue: true,
@@ -328,6 +328,7 @@ export function updateTutorialAfterSimulation(state: RunState, before: TutorialS
     setTutorialStep(state, "mission_results");
   }
 }
+
 
 
 

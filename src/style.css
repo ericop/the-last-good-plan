@@ -502,7 +502,7 @@ button:disabled,
 .modal-layer {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: auto;
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -545,41 +545,55 @@ button:disabled,
 .tutorial-card {
   position: fixed;
   left: 50%;
-  top: 8px;
+  top: 14px;
   transform: translateX(-50%);
-  width: min(360px, calc(100vw - 24px));
-  max-height: calc(100vh - 16px);
+  width: min(760px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
   overflow: auto;
   border-radius: 16px;
   padding: 10px 12px;
   background: rgba(11, 22, 31, 0.98);
-  z-index: 60;
+  z-index: 90;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: center;
 }
 
 .tutorial-card h2 {
-  margin: 4px 0 6px;
+  grid-column: 2;
+  margin: 0;
   font-size: 16px;
-  line-height: 1.15;
+  line-height: 1.1;
 }
 
 .tutorial-card .eyebrow {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: start;
+  padding-top: 3px;
   font-size: 8px;
   letter-spacing: 0.14em;
 }
 
 .tutorial-card p {
+  grid-column: 2;
   margin: 0;
-  font-size: 13px;
-  line-height: 1.28;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .tutorial-actions {
-  display: flex;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
   align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
+  justify-content: end;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 .tutorial-actions .ui-button {
@@ -589,6 +603,7 @@ button:disabled,
   font-size: 12px;
   line-height: 1.1;
   white-space: nowrap;
+  text-align: center;
 }
 
 .tutorial-highlight {
@@ -661,7 +676,10 @@ button:disabled,
 }
 
 @media (max-width: 760px) {
-  .hud-strip,
+  .hud-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .module-grid.compact,
   .reward-grid,
   .compact-stats,
@@ -669,8 +687,7 @@ button:disabled,
     grid-template-columns: 1fr;
   }
 
-  .mission-bar,
-  .tutorial-actions {
+  .mission-bar {
     flex-direction: column;
     align-items: stretch;
   }
@@ -681,10 +698,29 @@ button:disabled,
   }
 
   .tutorial-card {
-    top: 8px;
-    width: min(320px, calc(100vw - 16px));
-    max-height: calc(100vh - 12px);
+    top: 10px;
+    width: min(560px, calc(100vw - 12px));
+    max-height: calc(100vh - 16px);
     padding: 9px 10px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 8px;
+  }
+
+  .tutorial-card h2 {
+    font-size: 15px;
+  }
+
+  .tutorial-card p {
+    font-size: 11px;
+  }
+
+  .tutorial-actions {
+    gap: 6px;
+  }
+
+  .tutorial-actions .ui-button {
+    padding: 6px 8px;
+    font-size: 11px;
   }
 }
 
@@ -704,6 +740,18 @@ button:disabled,
 
 
 
+
+
+
+
+
+@media (min-width: 1600px) and (min-height: 900px) {
+  .tutorial-card {
+    top: 14px;
+    width: min(420px, calc(100vw - 40px));
+    padding: 12px 14px;
+  }
+}
 
 
 
