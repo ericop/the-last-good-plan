@@ -66,3 +66,4 @@ Play it here: [https://ericop.github.io/the-last-good-plan/](https://ericop.gith
 
 The MVP persists discovery progress and lightweight meta progression in localStorage. It does not save an in-progress run.
 
+
