@@ -16,6 +16,9 @@ Only the plan you chose... and what it becomes.
 
 Commit to a strategy, let your systems run, and watch your ship either stabilize into something brilliant... or slowly unravel.
 
+<img width="2516" height="1298" alt="image" src="https://github.com/user-attachments/assets/57f43050-0448-49f9-8e8d-a13165b348b1" />
+
+
 ## Features
 
 - Planning, execution, and end-of-cycle results loop
