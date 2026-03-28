@@ -10,6 +10,7 @@ export const UPGRADE_DEFINITIONS: Record<UpgradeId, UpgradeDefinition> = {
       { solar: 6, minerals: 8, scrap: 36 },
       { solar: 8, minerals: 11, scrap: 48 },
       { solar: 10, minerals: 14, scrap: 60 },
+      { solar: 12, minerals: 17, scrap: 72 },
     ],
   },
   defense_grid: {
@@ -21,6 +22,7 @@ export const UPGRADE_DEFINITIONS: Record<UpgradeId, UpgradeDefinition> = {
       { solar: 5, minerals: 7, scrap: 48 },
       { solar: 7, minerals: 9, scrap: 66 },
       { solar: 9, minerals: 11, scrap: 84 },
+      { solar: 11, minerals: 13, scrap: 102 },
     ],
   },
   support_bay: {
@@ -32,6 +34,7 @@ export const UPGRADE_DEFINITIONS: Record<UpgradeId, UpgradeDefinition> = {
       { solar: 6, minerals: 6, scrap: 42 },
       { solar: 8, minerals: 8, scrap: 60 },
       { solar: 10, minerals: 10, scrap: 78 },
+      { solar: 12, minerals: 12, scrap: 96 },
     ],
   },
 };
