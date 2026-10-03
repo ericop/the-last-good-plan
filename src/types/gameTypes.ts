@@ -339,7 +339,7 @@ export interface StoryState {
 
 export interface CampaignProgress {
   highestLevelCleared: number;
-  roguelikeUnlocked: boolean;
+  storyUnlocked: boolean;
   checkpoint?: string;
 }
 
@@ -520,6 +520,7 @@ export interface CycleSummary {
   perfectCommitmentReward: ResourcePool;
   stars: StarResult[];
   mvp?: MvpSummary;
+  tip?: string;
 }
 
 export interface TutorialState {

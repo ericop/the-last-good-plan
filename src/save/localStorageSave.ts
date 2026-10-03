@@ -37,7 +37,7 @@ export function loadSaveData(): SaveData {
       },
       campaign: {
         highestLevelCleared: 0,
-        roguelikeUnlocked: false,
+        storyUnlocked: false,
         ...(parsed.campaign ?? {}),
       },
     };

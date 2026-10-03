@@ -107,7 +107,7 @@ describe("campaign script", () => {
 describe("campaign dialog", () => {
   it("opens level 1 with an intro, waits on the choice, then plays the chosen reply", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "campaign" });
     const intro = CAMPAIGN_LEVELS[0].intro;
     expect(state.story.dialog?.lines[0]).toEqual(intro.lines[0]);
 
@@ -126,7 +126,7 @@ describe("campaign dialog", () => {
 
   it("names the encounter after the level and uses the authored warship", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "campaign" });
     jumpToLevel(state, 8);
     expect(state.simulation.encounterName).toBe("Level 8: Courtesy Patrol");
     expect(state.simulation.upcomingThreats.find((wave) => wave.kind === "warship")?.warshipId).toBe("ion_cutter");
@@ -135,7 +135,7 @@ describe("campaign dialog", () => {
 
   it("plays timed comms, picking the line for the dialog choice", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "campaign" });
     clearDialog(state, saveData);
     jumpToLevel(state, 2);
     state.story.choiceTag = "shop";
@@ -157,7 +157,7 @@ describe("campaign dialog", () => {
 describe("escorts, retries, and rescues", () => {
   it("fails the level when the escort goes down, then retries from the level checkpoint", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "campaign" });
     clearDialog(state, saveData);
     buildSturdyShip(state, saveData);
     jumpToLevel(state, 3);
@@ -179,7 +179,7 @@ describe("escorts, retries, and rescues", () => {
 
   it("sends good neighbors when the ship is in mortal danger", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "campaign" });
     clearDialog(state, saveData);
     jumpToLevel(state, 5);
     buildSturdyShip(state, saveData);
@@ -197,7 +197,7 @@ describe("escorts, retries, and rescues", () => {
 
   it("still sends the neighbors at the fallback time if the ship is doing fine", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "campaign" });
     clearDialog(state, saveData);
     jumpToLevel(state, 5);
     buildSturdyShip(state, saveData);
@@ -213,7 +213,7 @@ describe("escorts, retries, and rescues", () => {
 describe("campaign completion and the uncharted roguelike", () => {
   it("plays the whole campaign, unlocks Uncharted, and returns to the menu", () => {
     const saveData = createSaveData();
-    let state = createRunState(saveData, "planning");
+    let state = createRunState(saveData, "planning", { mode: "campaign" });
     buildSturdyShip(state, saveData);
     for (let level = 1; level <= CAMPAIGN_LEVELS.length; level += 1) {
       clearDialog(state, saveData, level % 2);
@@ -240,7 +240,7 @@ describe("campaign completion and the uncharted roguelike", () => {
       state = processCommand(state, { type: "continue_from_results" }, saveData);
     }
     expect(state.phase).toBe("menu");
-    expect(state.campaign.roguelikeUnlocked).toBe(true);
+    expect(state.campaign.storyUnlocked).toBe(true);
 
     const uncharted = processCommand(state, { type: "start_roguelike", seed: "LANTRN" }, saveData);
     expect(uncharted.mode).toBe("roguelike");
@@ -248,10 +248,31 @@ describe("campaign completion and the uncharted roguelike", () => {
     expect(uncharted.story.dialog).toBeUndefined();
   });
 
-  it("keeps Uncharted locked until the campaign is beaten", () => {
-    const saveData = createSaveData();
+  it("starts in free play and unlocks story mode after the first cleared mission", () => {
+    const saveData = createSaveData({ meta: { totalCyclesCompleted: 0, totalPerfectCommitments: 0, totalArtifactsRecovered: 0 } });
     const menu = createRunState(saveData, "menu");
-    expect(processCommand(menu, { type: "start_roguelike" }, saveData)).toBe(menu);
+    expect(menu.campaign.storyUnlocked).toBe(false);
+    expect(processCommand(menu, { type: "start_campaign", fresh: true }, saveData)).toBe(menu);
+
+    const state = processCommand(menu, { type: "start_roguelike" }, saveData);
+    expect(state.mode).toBe("roguelike");
+    expect(state.story.dialog).toBeUndefined();
+    buildSturdyShip(state, saveData);
+    launch(state, saveData);
+    state.ship.maxHull = 5000;
+    state.ship.hull = 5000;
+    step(state, 240);
+    expect(state.phase).toBe("results");
+    expect(state.summary?.tip).toContain("surviving");
+    expect(state.campaign.storyUnlocked).toBe(true);
+  });
+
+  it("skips the rest of a dialog in one command", () => {
+    const saveData = createSaveData();
+    const state = createRunState(saveData, "planning", { mode: "campaign" });
+    expect(state.story.dialog).toBeDefined();
+    processCommand(state, { type: "skip_dialog" }, saveData);
+    expect(state.story.dialog).toBeUndefined();
   });
 
   it("round-trips seed codes and builds the same maps from the same seed", () => {
@@ -259,7 +280,7 @@ describe("campaign completion and the uncharted roguelike", () => {
     expect(parseSeed("  lantrn ")).toBe(parseSeed("LANTRN"));
     expect(parseSeed("the lantern reach")).toBe(parseSeed("THE LANTERN REACH"));
     expect(parseSeed("")).toBeUndefined();
-    const saveData = createSaveData({ campaign: { highestLevelCleared: 10, roguelikeUnlocked: true } });
+    const saveData = createSaveData({ campaign: { highestLevelCleared: 10, storyUnlocked: true } });
     const first = createRunState(saveData, "planning", { mode: "roguelike", seed: parseSeed("SEED42") });
     const second = createRunState(saveData, "planning", { mode: "roguelike", seed: parseSeed("SEED42") });
     expect(first.sector).toEqual(second.sector);
@@ -267,7 +288,7 @@ describe("campaign completion and the uncharted roguelike", () => {
   });
 
   it("rolls seeded Governor bulletins and rescues in Uncharted runs", () => {
-    const saveData = createSaveData({ campaign: { highestLevelCleared: 10, roguelikeUnlocked: true } });
+    const saveData = createSaveData({ campaign: { highestLevelCleared: 10, storyUnlocked: true } });
     const rolls = (seed: string) =>
       Array.from({ length: 20 }, (_, index) => {
         const state = createRunState(saveData, "planning", { mode: "roguelike", seed: parseSeed(seed) });

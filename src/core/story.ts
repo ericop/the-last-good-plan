@@ -125,6 +125,10 @@ export function advanceDialog(state: RunState): void {
   }
 }
 
+export function skipDialog(state: RunState): void {
+  state.story.dialog = undefined;
+}
+
 export function chooseDialog(state: RunState, optionIndex: number): void {
   const dialog = state.story.dialog;
   const option = dialog?.options?.[optionIndex];
@@ -348,9 +352,6 @@ export function recordCampaignClear(state: RunState): void {
     return;
   }
   state.campaign.highestLevelCleared = Math.max(state.campaign.highestLevelCleared, level.number);
-  if (level.number >= CAMPAIGN_LENGTH) {
-    state.campaign.roguelikeUnlocked = true;
-  }
 }
 
 export function isCampaignFinale(state: RunState): boolean {

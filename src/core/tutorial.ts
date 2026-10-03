@@ -218,6 +218,7 @@ export function isTutorialCommandAllowed(state: RunState, command: GameCommand):
   const alwaysAllowed: GameCommand["type"][] = [
     "start_new_run",
     "advance_dialog",
+    "skip_dialog",
     "choose_dialog",
     "retry_level",
     "return_to_menu",
