@@ -670,6 +670,7 @@ export class RunScene extends Phaser.Scene {
     for (const slot of state.ship.slots) {
       const previousModule = previous.slotModules[slot.id];
       if (!previousModule && slot.moduleId) {
+        playSound("place");
         this.assemblyEffects.animateModulePlacement(
           this.createModuleView(slot, slot.moduleId, slot.epicModuleId),
           this.createSlotView(slot),

@@ -25,10 +25,7 @@ interface Tone {
 
 const SOUNDS: Record<SoundId, Tone[]> = {
   tap: [{ type: "triangle", from: 660, to: 520, start: 0, duration: 0.05, gain: 0.08 }],
-  place: [
-    { type: "square", from: 180, to: 90, start: 0, duration: 0.09, gain: 0.1 },
-    { type: "triangle", from: 520, to: 780, start: 0.03, duration: 0.08, gain: 0.06 },
-  ],
+  place: [{ type: "sine", from: 260, to: 170, start: 0, duration: 0.14, gain: 0.16 }],
   coin: [{ type: "square", from: 988, to: 1318, start: 0, duration: 0.06, gain: 0.04 }],
   star: [
     { type: "triangle", from: 784, to: 784, start: 0, duration: 0.12, gain: 0.1 },
