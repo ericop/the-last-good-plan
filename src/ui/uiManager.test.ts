@@ -47,6 +47,7 @@ describe("UI renders every phase without breaking", () => {
   it("shows the meta strip on the menu and the full planning layout after starting", () => {
     const { root, controller } = mount();
     expect(root.querySelector(".resource-strip.menu")).not.toBeNull();
+    expect(root.querySelector(".menu-card h1")?.textContent).toContain("The Last Good Plan");
     expect(root.dataset.layout).toBe("arena");
 
     startPlanning(controller);
@@ -167,6 +168,39 @@ describe("UI renders every phase without breaking", () => {
     expect(controller.getState().phase).toBe("planning");
   });
 
+  it("starts a run from the menu card with Enter", () => {
+    const { controller } = mount();
+    expect(controller.getState().phase).toBe("menu");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(controller.getState().phase).toBe("planning");
+  });
+
+  it("only animates the newest killfeed row, and only while it is new", () => {
+    const { root, controller } = mount();
+    startPlanning(controller);
+    controller.dispatch({ type: "select_fabrication_module", moduleId: "pulse_cannon" });
+    controller.dispatch({ type: "board_slot_pressed", slotId: "slot_0_0" });
+    controller.dispatch({ type: "begin_execution" });
+    const state = controller.getState();
+    state.simulation.elapsed = 10;
+    state.simulation.killfeed = [
+      { killer: "Pulse Cannon", victim: "Dart", color: 0xffffff, time: 9.9 },
+      { killer: "Pulse Cannon", victim: "Scavenger", color: 0xffffff, time: 5 },
+    ];
+    controller.dispatch({ type: "toggle_execution_speed" });
+    const rows = root.querySelectorAll("#rail-kills .kill-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].classList.contains("fresh")).toBe(true);
+    expect(rows[1].classList.contains("fresh")).toBe(false);
+
+    state.simulation.elapsed = 12;
+    controller.dispatch({ type: "toggle_execution_speed" });
+    const settledRow = root.querySelector("#rail-kills .kill-row");
+    controller.dispatch({ type: "toggle_execution_speed" });
+    expect(root.querySelector("#rail-kills .kill-row")).toBe(settledRow);
+    expect(settledRow?.classList.contains("fresh")).toBe(false);
+  });
+
   it("drives planning from the keyboard", () => {
     const { controller } = mount();
     startPlanning(controller);
@@ -191,7 +225,7 @@ describe("pocket layout", () => {
     const { root, controller, click } = mount();
     startPlanning(controller);
     expect(root.dataset.layout).toBe("pocket");
-    expect(root.querySelector(".side-rail")?.innerHTML.trim()).toBe("");
+    expect(root.querySelector("#rail-waves")?.innerHTML.trim()).toBe("");
     expect(root.querySelectorAll(".dock-button")).toHaveLength(3);
 
     click("[data-action='set-dock'][data-panel='bots']");

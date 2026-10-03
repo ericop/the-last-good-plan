@@ -27,7 +27,17 @@ import { haptic, isMuted, playSound, toggleMuted, unlockAudio } from "./feedback
 import { getLayoutMode, type LayoutMode } from "./layoutMode";
 
 type ResourceId = keyof ResourcePool;
-type SectionId = "hud" | "header" | "overlay" | "tray" | "dockNav" | "dockPanel" | "missionBar" | "modal" | "rail";
+type SectionId =
+  | "hud"
+  | "header"
+  | "overlay"
+  | "tray"
+  | "dockNav"
+  | "dockPanel"
+  | "missionBar"
+  | "modal"
+  | "railWaves"
+  | "railKills";
 
 const DOCK_ITEMS: Array<{ id: DockPanelId; label: string; pocket: boolean }> = [
   { id: "ship", label: "Ship", pocket: true },
@@ -135,7 +145,8 @@ export class UIManager {
   private lastHull?: number;
   private hullHitUntil = 0;
   private countedSummaryKey?: string;
-  private sideRail: HTMLElement;
+  private railWaves: HTMLElement;
+  private railKills: HTMLElement;
   private layoutMode: LayoutMode = getLayoutMode();
   private sheetOpen = false;
 
@@ -157,7 +168,20 @@ export class UIManager {
             <div class="build-tray" id="build-tray"></div>
             <div class="mission-bar-wrap" id="mission-bar"></div>
           </main>
-          <aside class="side-rail" id="side-rail"></aside>
+          <aside class="side-rail" id="side-rail">
+            <section class="rail-block">
+              <span class="eyebrow">Wave timeline</span>
+              <div class="wave-timeline" id="rail-waves"></div>
+            </section>
+            <section class="rail-block">
+              <span class="eyebrow">Killfeed</span>
+              <div class="killfeed" id="rail-kills"></div>
+            </section>
+            <section class="rail-block hotkey-legend">
+              <span class="eyebrow">Hotkeys</span>
+              <small><kbd>1</kbd>-<kbd>9</kbd> build · <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> doctrine · <kbd>Enter</kbd> launch · <kbd>F</kbd> speed · <kbd>Space</kbd> pause</small>
+            </section>
+          </aside>
         </div>
         <div class="modal-layer" id="modal-layer"></div>
         <div class="fx-layer" id="fx-layer"><div class="ghost-hand" id="ghost-hand">${ICONS.hand}</div></div>
@@ -182,7 +206,8 @@ export class UIManager {
     this.modalLayer = find("#modal-layer");
     this.fxLayer = find("#fx-layer");
     this.ghostHand = find("#ghost-hand");
-    this.sideRail = find("#side-rail");
+    this.railWaves = find("#rail-waves");
+    this.railKills = find("#rail-kills");
 
     this.root.addEventListener("pointerdown", unlockAudio);
     this.root.addEventListener("click", this.handleClick);
@@ -216,6 +241,12 @@ export class UIManager {
     }
     const state = this.controller.getState();
     const key = event.key.toLowerCase();
+    if (state.phase === "menu") {
+      if (key === "enter") {
+        this.controller.dispatch({ type: "start_new_run" });
+      }
+      return;
+    }
     if (state.phase === "results") {
       if (key === "enter") {
         this.controller.dispatch(state.simulation.chests.length > 0 && !state.pendingReward ? { type: "open_chest" } : { type: "continue_from_results" });
@@ -346,10 +377,13 @@ export class UIManager {
     this.root.classList.toggle("menu-mode", !inRun);
     this.root.dataset.layout = this.layoutMode;
     this.root.classList.toggle("sheet-open", this.layoutMode === "pocket" && this.sheetOpen);
-    this.setSectionHtml("rail", this.sideRail, inRun && this.layoutMode === "arena" ? this.renderSideRail(state) : "");
+    if (inRun && this.layoutMode === "arena") {
+      this.setSectionHtml("railWaves", this.railWaves, this.renderWaveTimeline(state));
+      this.setSectionHtml("railKills", this.railKills, this.renderKillfeed(state));
+    }
     this.setSectionHtml("hud", this.hudStrip, this.renderHud(state));
     this.setSectionHtml("header", this.matchHeader, inRun ? this.renderMatchHeader(state) : "");
-    this.setSectionHtml("overlay", this.battleOverlay, inRun ? this.renderBattleOverlay(state) : "");
+    this.setSectionHtml("overlay", this.battleOverlay, inRun ? this.renderBattleOverlay(state) : this.renderMenuCard(state));
     this.setSectionHtml("tray", this.tray, inRun ? this.renderTray(state) : "");
     this.setSectionHtml("dockNav", this.dockNav, inRun ? this.renderDockNav(state) : "");
     this.setSectionHtml("dockPanel", this.dockPanel, inRun ? this.renderDockPanel(state) : "");
@@ -945,7 +979,7 @@ export class UIManager {
     `;
   }
 
-  private renderSideRail(state: RunState): string {
+  private renderWaveTimeline(state: RunState): string {
     const simulation = state.simulation;
     const waves = simulation.upcomingThreats
       .map((wave, index) => {
@@ -961,27 +995,36 @@ export class UIManager {
         `;
       })
       .join("");
+    return waves || `<small class="fine-print">No telegraphed waves.</small>`;
+  }
+
+  private renderKillfeed(state: RunState): string {
+    const simulation = state.simulation;
     const kills = simulation.killfeed
       .map(
-        (entry) => `
-          <div class="kill-row">
+        (entry, index) => `
+          <div class="kill-row ${index === 0 && simulation.elapsed - entry.time < 0.6 ? "fresh" : ""}">
             <b style="color:${toHexColor(entry.color)}">${entry.killer}</b><span>▸</span><span>${entry.victim}</span>
           </div>
         `,
       )
       .join("");
+    return kills || `<small class="fine-print">${state.phase === "planning" ? "Launch to start the fight." : "Quiet so far."}</small>`;
+  }
+
+  private renderMenuCard(state: RunState): string {
     return `
-      <section class="rail-block">
-        <span class="eyebrow">Wave timeline</span>
-        <div class="wave-timeline">${waves || `<small class="fine-print">No telegraphed waves.</small>`}</div>
-      </section>
-      <section class="rail-block">
-        <span class="eyebrow">Killfeed</span>
-        <div class="killfeed">${kills || `<small class="fine-print">${state.phase === "planning" ? "Launch to start the fight." : "Quiet so far."}</small>`}</div>
-      </section>
-      <section class="rail-block hotkey-legend">
-        <span class="eyebrow">Hotkeys</span>
-        <small><kbd>1</kbd>-<kbd>9</kbd> build · <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> doctrine · <kbd>Enter</kbd> launch · <kbd>F</kbd> speed · <kbd>Space</kbd> pause</small>
+      <section class="menu-card">
+        <h1>The Last Good Plan</h1>
+        <p class="menu-tagline">Build a ship, merge modules into bots, and let the mission run.</p>
+        <ol class="menu-steps">
+          <li><b>Build</b><span>Place modules on your 3×3 ship.</span></li>
+          <li><b>Merge</b><span>Fuse pairs or trios into autonomous bots.</span></li>
+          <li><b>Launch</b><span>Pick a jump and watch the plan play out.</span></li>
+        </ol>
+        <button class="mission-button primary-cta ready" data-action="start-new-run">Start New Run ▸</button>
+        <button class="ui-button ghost" data-action="replay-tutorial">Replay tutorial</button>
+        <small class="fine-print">${state.meta.totalCyclesCompleted > 0 ? "Your discoveries and stars carry over between runs." : "Press Enter to start."}</small>
       </section>
     `;
   }
