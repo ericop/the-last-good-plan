@@ -1653,41 +1653,72 @@ kbd,
 }
 
 .packet-row {
+  --key-travel: 4px;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(64px, 1fr);
   gap: 6px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding: 6px 6px 10px;
+  border-radius: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  background: linear-gradient(180deg, #03080c, #0a161e);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.75), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 }
 
+/* Keys latch down like radio preset buttons instead of lifting, so nothing pokes out of the scrolling console. */
 .packet {
+  --key-edge: color-mix(in srgb, var(--packet-color) 40%, #03080c);
   position: relative;
   display: grid;
   justify-items: center;
   gap: 2px;
   min-height: 72px;
   padding: 6px 4px;
-  border-radius: 14px;
+  border-radius: 12px;
   border: 2px solid color-mix(in srgb, var(--packet-color) 55%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--packet-color) 22%, #12242f), #0c1820);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--packet-color) 26%, #16303d), #0c1820);
   color: var(--text-main);
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 var(--key-travel) 0 var(--key-edge), 0 calc(var(--key-travel) + 3px) 6px rgba(0, 0, 0, 0.5);
+  transition:
+    transform 0.09s cubic-bezier(0.3, 1.6, 0.5, 1),
+    box-shadow 0.09s ease,
+    filter 0.12s ease;
+}
+
+.packet::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
+  transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
 .packet:hover {
-  transform: translateY(-2px);
+  filter: brightness(1.12);
 }
 
-.packet:active {
-  transform: scale(0.94);
+.packet:active,
+.packet.selected {
+  transform: translateY(var(--key-travel));
+  box-shadow: 0 0 0 var(--key-edge), inset 0 3px 7px rgba(0, 0, 0, 0.5);
 }
 
 .packet.selected {
-  border-color: #fff;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--packet-color) 70%, transparent), 0 8px 18px rgba(0, 0, 0, 0.4);
-  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--packet-color) 85%, #fff);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--packet-color) 34%, #102530), #0a1820);
+}
+
+.packet.selected::after {
+  background: var(--packet-color);
+  box-shadow: 0 0 4px 1px var(--packet-color), 0 0 10px 2px color-mix(in srgb, var(--packet-color) 60%, transparent);
 }
 
 .packet.unaffordable {
@@ -1696,6 +1727,7 @@ kbd,
 
 .packet.locked {
   border-style: dashed;
+  box-shadow: 0 2px 0 var(--key-edge);
 }
 
 .packet .hotkey {
@@ -1744,18 +1776,36 @@ kbd,
   height: 12px;
 }
 
+/* Packets and the merge preview swap in place; a fixed body height keeps the battlefield above from shifting. */
+.tray-body {
+  height: 134px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.tray-details,
+.merge-copy p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
 .tray-details {
   margin: 0;
   font-size: 13px;
   line-height: 1.3;
   color: var(--text-soft);
-  min-height: 1.3em;
 }
 
 .merge-strip {
+  grid-row: 1 / -1;
   display: flex;
   align-items: center;
   gap: 12px;
+  min-height: 0;
 }
 
 .merge-copy {
@@ -2042,6 +2092,10 @@ kbd,
   border-left: 4px solid var(--packet-color, rgba(120, 177, 198, 0.3));
 }
 
+.module-card.selected {
+  grid-column: 1 / -1;
+}
+
 .bot-card {
   display: grid;
   gap: 4px;
@@ -2315,10 +2369,22 @@ kbd,
   display: none;
 }
 
-#app[data-layout="pocket"] .sound-toggle {
-  margin-left: 0;
-  min-width: 36px;
-  min-height: 36px;
+#app[data-layout="pocket"] .resource-strip:not(.menu) .sound-toggle {
+  display: none;
+}
+
+.sound-setting {
+  display: none;
+}
+
+#app[data-layout="pocket"] .sound-setting {
+  display: block;
+}
+
+.sound-setting .ui-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 #app[data-layout="pocket"] .resource-strip {
@@ -2503,6 +2569,8 @@ kbd,
 }
 
 #app[data-layout="pocket"] .packet-row {
+  --key-travel: 3px;
+  padding: 4px 4px 8px;
   grid-auto-columns: 64px;
 }
 
@@ -2510,11 +2578,14 @@ kbd,
   min-height: 66px;
 }
 
+#app[data-layout="pocket"] .tray-body {
+  height: 120px;
+  gap: 4px;
+}
+
 #app[data-layout="pocket"] .tray-details {
   font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  -webkit-line-clamp: 1;
 }
 
 #app[data-layout="pocket"] .merge-copy p,

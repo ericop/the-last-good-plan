@@ -649,7 +649,7 @@ export class UIManager {
       .map((slotId) => getSlotById(state.ship.slots, slotId))
       .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot));
     const body = selectedSlots.length >= 2 ? this.renderMergeStrip(state, selectedSlots) : this.renderPackets(state);
-    return `${doctrineRow}${body}`;
+    return `${doctrineRow}<div class="tray-body">${body}</div>`;
   }
 
   private renderPackets(state: RunState): string {
@@ -803,6 +803,10 @@ export class UIManager {
         <div class="message-list">
           ${state.simulation.messageLog.slice(0, 5).map((entry) => `<div class="message-entry">${entry}</div>`).join("")}
         </div>
+      </div>
+      <div class="panel-block sound-setting">
+        <span class="eyebrow">Sound</span>
+        <button class="ui-button secondary" data-action="toggle-sound">${icon(isMuted() ? "sound_off" : "sound_on")} ${isMuted() ? "Sound off" : "Sound on"}</button>
       </div>
       <div class="panel-block">
         <span class="eyebrow">Tutorial</span>
