@@ -215,7 +215,7 @@ export function getTutorialStepView(state: RunState): TutorialStepView | undefin
 }
 
 export function isTutorialCommandAllowed(state: RunState, command: GameCommand): boolean {
-  if (!state.tutorial.active) {
+  if (!state.tutorial.active || command.type === "start_new_run") {
     return true;
   }
 

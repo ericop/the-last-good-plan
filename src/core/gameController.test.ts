@@ -168,6 +168,24 @@ describe("game controller updates", () => {
     expect(state.paused).toBe(false);
   });
 
+  it("starts a fresh run after losing a replayed tutorial mission", () => {
+    Object.defineProperty(globalThis, "localStorage", {
+      value: { setItem: () => undefined },
+      configurable: true,
+    });
+    const controller = new GameController(createSaveData(true));
+    controller.dispatch({ type: "replay_tutorial" });
+    const state = controller.getState();
+    expect(state.tutorial.active).toBe(true);
+    state.phase = "run_over";
+    state.tutorial.stepId = "mission_results";
+
+    controller.dispatch({ type: "start_new_run" });
+
+    expect(controller.getState().phase).toBe("planning");
+    expect(controller.getState().ship.hull).toBe(controller.getState().ship.maxHull);
+  });
+
   it("runs missions at double speed when fast forward is enabled", () => {
     Object.defineProperty(globalThis, "localStorage", {
       value: { setItem: () => undefined },
