@@ -96,6 +96,7 @@ export function createCycleThreatSchedule(cycle: number, route: RouteId = getDef
         { time: 6, label: `Boss screen x${supportCount}`, kind: "scavenger", count: supportCount, spacing: 0.9 },
         { time: 14, label: `Boss arrival: ${boss.name}`, kind: "boss", count: 1, bossId: boss.id },
         { time: 28, label: `Escort reinforcements x${supportCount + 1}`, kind: "scavenger", count: supportCount + 1, spacing: 0.9 },
+        { time: 50, label: `Last guard x${supportCount + 1}`, kind: "scavenger", count: supportCount + 1, spacing: 0.9 },
       ];
     }
     case "duel": {
@@ -112,13 +113,13 @@ export function createCycleThreatSchedule(cycle: number, route: RouteId = getDef
 export function getCycleDuration(cycle: number, route: RouteId = getDefaultRoute(cycle)): number {
   switch (route) {
     case "boss":
-      return 64;
+      return 90;
     case "duel":
-      return 70;
+      return 80;
     case "derelict":
-      return 34;
+      return 50;
     default:
-      return 46;
+      return 80;
   }
 }
 

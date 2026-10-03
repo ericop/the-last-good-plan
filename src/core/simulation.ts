@@ -50,7 +50,7 @@ const KNOCKBACK_TIME = 0.35;
 const ANNOUNCEMENT_TIME = 2.2;
 const CALLOUT_LIFETIME = 1.2;
 const QUICK_KILL_TIME = 20;
-const HERO_REGEN = 3;
+const HERO_REGEN = 7;
 const FIRST_CLEAR_TIP =
   "You win a mission by surviving until the clock hits zero. Leftover enemies just fly home: kills pay scrap, and the stars track bonus goals. Story mode is now unlocked on the main menu.";
 const HERO_ARMOR = 0.6;

@@ -220,11 +220,11 @@ describe("campaign completion and the uncharted roguelike", () => {
       expect(state.cycle).toBe(level);
       state.resources = { solar: 999, minerals: 999, scrap: 999 };
       launch(state, saveData);
-      state.ship.maxHull = 5000;
-      state.ship.hull = 5000;
+      state.ship.maxHull = 50000;
+      state.ship.hull = 50000;
       for (const fighter of state.simulation.fighters.filter((candidate) => candidate.hero)) {
-        fighter.maxHp = 5000;
-        fighter.hp = 5000;
+        fighter.maxHp = 50000;
+        fighter.hp = 50000;
       }
       step(state, 240);
       expect(state.phase, `level ${level}`).toBe("results");

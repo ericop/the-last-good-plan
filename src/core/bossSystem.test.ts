@@ -31,9 +31,9 @@ describe("boss system", () => {
   it("replaces normal threats with a boss schedule on boss cycles", () => {
     const threats = createCycleThreatSchedule(10);
 
-    expect(threats).toHaveLength(3);
+    expect(threats).toHaveLength(4);
     expect(threats.some((wave) => wave.kind === "boss")).toBe(true);
-    expect(threats.filter((wave) => wave.kind === "scavenger").length).toBe(2);
+    expect(threats.filter((wave) => wave.kind === "scavenger").length).toBe(3);
   });
 
   it("queues an epic module chest for the debrief on boss defeat", () => {
