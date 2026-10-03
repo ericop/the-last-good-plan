@@ -2,8 +2,8 @@ import Phaser from "phaser";
 import { getEpicModuleById, getSlotModulePresentation } from "../data/epicModuleRegistry";
 import { getMergePreviewFromModules } from "../core/discovery";
 import type { GameController } from "../core/gameController";
-import { getPhaseLabel } from "../core/tutorial";
-import { GAME_HEIGHT, GAME_WIDTH, LANE_YS, SHIP_CENTER, SLOT_SIZE } from "../game/constants";
+import { getTutorialHandTarget } from "../core/tutorial";
+import { BOARD_ORIGIN, GAME_HEIGHT, GAME_WIDTH, LANE_YS, SHIP_CENTER, SLOT_GAP, SLOT_SIZE } from "../game/constants";
 import {
   AssemblyEffectsManager,
   drawMechanicalModulePlate,
@@ -23,8 +23,36 @@ import type {
   RunState,
   ShipSlot,
 } from "../types/gameTypes";
+import { haptic, playSound } from "../ui/feedback";
+import { getLayoutMode } from "../ui/layoutMode";
 
 const BARRAGE_RED = 0xff2850;
+const LAUNCH_FLASH_TIME = 0.45;
+const BIG_HIT_HULL = 8;
+const OBSERVER_ZOOM = 1.3;
+const PLANNING_ZOOM = 1.45;
+const BOARD_CENTER = {
+  x: BOARD_ORIGIN.x + (SLOT_SIZE * 3 + SLOT_GAP * 2) / 2,
+  y: BOARD_ORIGIN.y + (SLOT_SIZE * 3 + SLOT_GAP * 2) / 2,
+};
+
+interface LaunchFlash {
+  x: number;
+  y: number;
+  age: number;
+  color: number;
+}
+
+interface FeedbackSnapshot {
+  warningIds: Set<string>;
+  firedIds: Set<string>;
+  fighterIds: Set<string>;
+  announcement?: string;
+  calloutCount: number;
+  launching: boolean;
+  bossIntro: boolean;
+  hull: number;
+}
 
 interface VisualSnapshot {
   phase: RunState["phase"];
@@ -43,13 +71,11 @@ export class RunScene extends Phaser.Scene {
   private barrageAlertTexts: Phaser.GameObjects.Text[] = [];
   private slotLabelTexts = new Map<string, Phaser.GameObjects.Text>();
   private slotCodeTexts = new Map<string, Phaser.GameObjects.Text>();
-  private threatTexts: Phaser.GameObjects.Text[] = [];
-  private threatTitleText!: Phaser.GameObjects.Text;
-  private phaseText!: Phaser.GameObjects.Text;
-  private objectiveText!: Phaser.GameObjects.Text;
-  private bossLabelText!: Phaser.GameObjects.Text;
-  private hintText!: Phaser.GameObjects.Text;
-  private overlayText!: Phaser.GameObjects.Text;
+  private calloutTexts: Phaser.GameObjects.Text[] = [];
+  private world!: Phaser.GameObjects.Container;
+  private portrait = false;
+  private launchFlashes: LaunchFlash[] = [];
+  private feedbackSnapshot?: FeedbackSnapshot;
   private starfield!: StarfieldHandle;
   private assemblyEffects!: AssemblyEffectsManager;
   private visualTime = 0;
@@ -72,7 +98,7 @@ export class RunScene extends Phaser.Scene {
 
     const state = this.controller.getState();
     for (const slot of state.ship.slots) {
-      const zone = this.add.zone(slot.x, slot.y, SLOT_SIZE, SLOT_SIZE).setInteractive({ useHandCursor: true });
+      const zone = this.add.zone(slot.x, slot.y, SLOT_SIZE + SLOT_GAP, SLOT_SIZE + SLOT_GAP).setInteractive({ useHandCursor: true });
       zone.on("pointerdown", () => {
         this.controller.dispatch({ type: "board_slot_pressed", slotId: slot.id });
       });
@@ -100,60 +126,21 @@ export class RunScene extends Phaser.Scene {
       this.slotCodeTexts.set(slot.id, codeText);
     }
 
-    this.threatTitleText = this.add.text(502, 108, "Waves", {
-      fontFamily: "Trebuchet MS, Verdana, sans-serif",
-      fontSize: "14px",
-      color: "#d3edf6",
-    });
-
-    for (let index = 0; index < 4; index += 1) {
-      this.threatTexts.push(
-        this.add.text(502, 134 + index * 26, "", {
-          fontFamily: "Trebuchet MS, Verdana, sans-serif",
-          fontSize: "12px",
-          color: "#f7dba0",
-          wordWrap: { width: 176 },
-        }),
+    for (let index = 0; index < 8; index += 1) {
+      this.calloutTexts.push(
+        this.add
+          .text(0, 0, "", {
+            fontFamily: "system-ui, sans-serif",
+            fontSize: "22px",
+            fontStyle: "bold",
+            color: "#ffffff",
+            stroke: "#0b1720",
+            strokeThickness: 4,
+          })
+          .setOrigin(0.5)
+          .setVisible(false),
       );
     }
-
-    this.phaseText = this.add.text(24, 20, "", {
-      fontFamily: "Trebuchet MS, Verdana, sans-serif",
-      fontSize: "18px",
-      color: "#e6f3ff",
-    });
-    this.objectiveText = this.add.text(722, 58, "", {
-      fontFamily: "Trebuchet MS, Verdana, sans-serif",
-      fontSize: "16px",
-      color: "#d3edf6",
-    });
-    this.bossLabelText = this.add
-      .text(GAME_WIDTH / 2, 48, "", {
-        fontFamily: "Trebuchet MS, Verdana, sans-serif",
-        fontSize: "13px",
-        color: "#f2e3b4",
-        align: "center",
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(3)
-      .setVisible(false);
-    this.hintText = this.add.text(28, 594, "", {
-      fontFamily: "Trebuchet MS, Verdana, sans-serif",
-      fontSize: "14px",
-      color: "#9fc6d8",
-      wordWrap: { width: 680 },
-    });
-    this.overlayText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", {
-        fontFamily: "Georgia, serif",
-        fontSize: "30px",
-        color: "#f7f4df",
-        align: "center",
-        wordWrap: { width: 420 },
-      })
-      .setOrigin(0.5)
-      .setDepth(10)
-      .setVisible(false);
 
     for (let index = 0; index < 4; index += 1) {
       this.barrageAlertTexts.push(
@@ -164,6 +151,15 @@ export class RunScene extends Phaser.Scene {
           .setVisible(false),
       );
     }
+
+    this.world = this.add.container(0, 0, [
+      this.graphics,
+      this.boosterGraphics,
+      ...this.children.list.filter(
+        (child) => child !== this.graphics && child !== this.boosterGraphics && child !== this.world,
+      ),
+    ]);
+    this.applyOrientation(getLayoutMode() === "pocket");
 
     this.input.keyboard?.on("keydown-SPACE", (event: KeyboardEvent) => {
       event.preventDefault();
@@ -180,7 +176,19 @@ export class RunScene extends Phaser.Scene {
     this.starfield.update(dt);
     this.controller.update(dt);
     const state = this.controller.getState();
+    const portrait = getLayoutMode() === "pocket";
+    if (portrait !== this.portrait) {
+      this.applyOrientation(portrait);
+    }
     const missionLive = state.phase === "execution" && !state.paused && !state.pendingReward;
+    if (missionLive) {
+      this.launchFlashes.forEach((flash) => {
+        flash.age += dt * state.executionSpeed;
+      });
+      this.launchFlashes = this.launchFlashes.filter((flash) => flash.age < LAUNCH_FLASH_TIME);
+    }
+    this.emitBattleFeedback(state);
+    this.updateObserverCamera(state, dt);
     if (state.phase !== "execution") {
       this.boosterTrails.clear();
     } else if (missionLive) {
@@ -198,7 +206,6 @@ export class RunScene extends Phaser.Scene {
     this.drawLanes(state);
     this.drawSlots(state);
     this.drawObjective(state);
-    this.drawCapitalHud(state);
     this.drawBeams(state);
     this.drawBots(state);
     this.drawFighters(state);
@@ -206,11 +213,13 @@ export class RunScene extends Phaser.Scene {
     this.drawProjectiles(state);
     this.drawBarrages(state);
     this.drawImpacts(state);
+    this.drawLaunchFlashes();
+    this.drawTapMarker(state);
     this.boosterGraphics.clear();
     this.boosterTrails.draw(this.boosterGraphics);
     this.assemblyEffects.drawOverlay(this.graphics);
-    this.updateTexts(state);
-    this.drawOverlay(state);
+    this.updateSlotLabels(state);
+    this.drawCallouts(state);
   }
 
   private drawBackground(): void {
@@ -262,7 +271,6 @@ export class RunScene extends Phaser.Scene {
     this.graphics.fillCircle(SHIP_CENTER.x, SHIP_CENTER.y, 82);
 
     drawAmbientPanel(this.graphics, 690, 102, 232, 128, 18, time + 2.1);
-    drawAmbientPanel(this.graphics, 486, 96, 192, 150, 16, time + 3.2);
   }
 
   private drawSlots(state: RunState): void {
@@ -323,7 +331,7 @@ export class RunScene extends Phaser.Scene {
           .setColor(recommended ? "#f7e6a7" : "#9dc0d0")
           .setPosition(slot.x, slot.y)
           .setScale(1)
-          .setRotation(0)
+          .setRotation(-this.world.rotation)
           .setAlpha(1);
         continue;
       }
@@ -340,7 +348,7 @@ export class RunScene extends Phaser.Scene {
         .setColor(slot.epicModuleId ? "#13100a" : "#091016")
         .setPosition(renderState.x, renderState.y)
         .setScale(renderState.textScale)
-        .setRotation(renderState.rotation * 0.5)
+        .setRotation(renderState.rotation * 0.5 - this.world.rotation)
         .setAlpha(renderState.textAlpha);
     }
   }
@@ -368,7 +376,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
     const pulse = 0.12 + Math.sin(this.visualTime * 1.4) * 0.04;
-    for (const laneY of LANE_YS) {
+    for (const laneY of state.simulation.lanes.map((lane) => LANE_YS[lane])) {
       for (let x = 930; x > 470; x -= 26) {
         this.graphics.lineStyle(2, 0xff8f7a, pulse);
         this.graphics.lineBetween(x, laneY, x - 12, laneY);
@@ -378,43 +386,6 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private drawCapitalHud(state: RunState): void {
-    const boss = state.simulation.enemies.find((enemy) => (enemy.kind === "boss" || enemy.kind === "warship") && enemy.hp > 0);
-    if (!boss) {
-      this.bossLabelText.setVisible(false);
-      return;
-    }
-
-    const width = 340;
-    const x = GAME_WIDTH / 2 - width / 2;
-    const y = 40;
-    const hpRatio = boss.hp / boss.maxHp;
-    const shieldRatio = boss.maxShield ? (boss.shield ?? 0) / boss.maxShield : 0;
-
-    this.graphics.fillStyle(0x07131c, 0.88);
-    this.graphics.fillRoundedRect(x, y, width, 44, 12);
-    this.graphics.lineStyle(1, boss.color, 0.72);
-    this.graphics.strokeRoundedRect(x, y, width, 44, 12);
-
-    this.graphics.fillStyle(0x14222d, 1);
-    this.graphics.fillRoundedRect(x + 12, y + 18, width - 24, 10, 5);
-    if (shieldRatio > 0) {
-      this.graphics.fillStyle(0x6dd4ff, 0.85);
-      this.graphics.fillRoundedRect(x + 12, y + 18, (width - 24) * shieldRatio, 10, 5);
-    }
-    this.graphics.fillStyle(boss.color, 0.9);
-    this.graphics.fillRoundedRect(x + 12, y + 30, (width - 24) * hpRatio, 8, 4);
-
-    this.graphics.fillStyle(0xf1e8ca, 0.92);
-    this.graphics.fillCircle(x + 18, y + 11, 3);
-
-    const telegraph =
-      this.getBarrageTelegraph(state, boss) ??
-      (boss.kind === "boss" ? state.simulation.bossEncounter.telegraph : this.getWeaponTelegraph(boss));
-    const telegraphText = telegraph ? ` | ${telegraph}` : "";
-    this.phaseText.setDepth(2);
-    this.bossLabelText.setText(`${boss.name}${telegraphText}`).setPosition(GAME_WIDTH / 2, y + 4).setVisible(true);
-  }
   private drawBots(state: RunState): void {
     for (const bot of state.ship.bots) {
       if (this.assemblyEffects.isBotSuppressed(bot.id)) {
@@ -688,70 +659,6 @@ export class RunScene extends Phaser.Scene {
     this.graphics.fillPoints(this.getBarrageCorridor(barrage, 6 + fade * 6), true);
   }
 
-  private getBarrageTelegraph(state: RunState, enemy: EnemyInstance): string | undefined {
-    const barrage = state.simulation.barrages.find((candidate) => candidate.sourceId === enemy.id && candidate.firedAge === undefined);
-    return barrage ? `${barrage.name.toUpperCase()} LOCKED ${Math.max(0, barrage.timer).toFixed(1)}s` : undefined;
-  }
-
-  private getWeaponTelegraph(enemy: EnemyInstance): string | undefined {
-    const charging = (enemy.weapons ?? [])
-      .map((weapon) => ({ weapon, remaining: weapon.chargeTime - weapon.charge }))
-      .sort((left, right) => left.remaining - right.remaining)[0];
-    if (!charging) {
-      return undefined;
-    }
-    return `${charging.weapon.name} ${Math.max(0, charging.remaining).toFixed(1)}s`;
-  }
-
-  private updateTexts(state: RunState): void {
-    this.phaseText.setText(
-      `Cycle ${state.cycle} | ${state.simulation.encounterName} | ${getPhaseLabel(state.phase)} | Hull ${Math.round(state.ship.hull)}/${state.ship.maxHull} | Shield ${Math.round(state.ship.shield)}/${state.ship.maxShield}`,
-    );
-    this.objectiveText.setText(
-      `Moon Objective\nIntegrity ${Math.max(0, Math.round(state.simulation.objective.integrity))}/${state.simulation.objective.maxIntegrity}`,
-    );
-    this.hintText.setText(this.getHintText(state));
-
-    const upcoming = state.simulation.upcomingThreats.slice(0, this.threatTexts.length);
-    this.threatTexts.forEach((text, index) => text.setVisible(index < upcoming.length));
-    upcoming.forEach((wave, index) => {
-      const text = this.threatTexts[index];
-      const spawned = index < state.simulation.threatCursor;
-      const countdown = Math.max(0, wave.time - state.simulation.elapsed);
-      text.setText(spawned ? `${wave.label} | deployed` : `${wave.label} | ${countdown.toFixed(1)}s`);
-      text.setColor(spawned ? "#7ec9a9" : wave.kind === "boss" ? "#f2e3b4" : "#f7dba0");
-    });
-
-    for (const slot of state.ship.slots) {
-      const labelText = this.slotLabelTexts.get(slot.id);
-      labelText?.setColor(state.ui.selectedSlotIds.includes(slot.id) ? "#dfffee" : "#9cc1cf");
-    }
-  }
-
-  private drawOverlay(state: RunState): void {
-    if (state.simulation.bossEncounter.introTimer > 0 && state.simulation.bossEncounter.activeBossName) {
-      this.graphics.fillStyle(0x050b10, 0.46);
-      this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      this.overlayText
-        .setText(`${state.simulation.bossEncounter.activeBossName}\nAncient signal spike detected`)
-        .setVisible(true);
-      return;
-    }
-    if (state.paused && state.phase === "execution") {
-      this.graphics.fillStyle(0x07131c, 0.52);
-      this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      this.overlayText.setText("Paused\nThe mission is fully frozen.").setVisible(true);
-      return;
-    }
-    if (state.pendingReward) {
-      this.graphics.fillStyle(0x07131c, 0.28);
-      this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      this.overlayText.setText("Reward choice ready\nPick one reward in the overlay.").setVisible(true);
-      return;
-    }
-    this.overlayText.setVisible(false);
-  }
-
   private syncAssemblyEffects(state: RunState): void {
     const current = this.captureVisualSnapshot(state);
     const previous = this.visualSnapshot;
@@ -904,42 +811,166 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private getHintText(state: RunState): string {
-    if (state.tutorial.active) {
-      switch (state.tutorial.stepId) {
-        case "place_solar_collector":
-          return "Click Solar Collector, then click an empty ship slot, like C3.";
-        case "place_mineral_drill":
-          return "Place the Mineral Drill. You will merge it with the Solar Collector in the next step.";
-        case "place_third_module":
-          return "Place one more module to round out the ship. Shield Emitter or Cargo Core are both good tutorial picks.";
-        case "merge_bot":
-          return "Select the Solar Collector and Mineral Drill, then press Create Bot in the Bots tab.";
-        case "select_doctrine":
-          return "Balanced is recommended for the first mission. Click it once in the Doctrine tab.";
-        case "start_mission":
-          return "The big Start Mission button is ready when you are.";
-        case "mission_running":
-          return "Watch the system run. You can change doctrine mid-mission, but each change costs 10% commitment.";
-        default:
-          return "Follow the highlighted action to keep the tutorial moving.";
-      }
-    }
-
-    if (state.phase === "planning") {
-      if (state.simulation.encounter === "duel") {
-        return "Next up is a ship duel. Cannons and fighters trade fire with the warship; shields soak its lasers.";
-      }
-      if (state.simulation.encounter === "boss") {
-        return "A boss ship is coming. Plan for a long fight: shields, repairs, and steady damage.";
-      }
-      return "Next up is swarm defense. Enemies stream down three lanes toward the ship. Cover them with cannons, bots, and fighters.";
-    }
-
-    return "Mission resolution is automatic. Space pauses instantly, and doctrine changes are optional but reduce commitment.";
-  }
-
   private findSlot(slots: ShipSlot[], slotId: string): ShipSlot | undefined {
     return slots.find((slot) => slot.id === slotId);
+  }
+
+  // Portrait phones turn the battlefield so enemies enter from the top and the ship sits under the thumb. The sim keeps
+  // its landscape coordinates; only this container rotates, and texts counter-rotate to stay upright.
+  private applyOrientation(portrait: boolean): void {
+    this.portrait = portrait;
+    const width = portrait ? GAME_HEIGHT : GAME_WIDTH;
+    const height = portrait ? GAME_WIDTH : GAME_HEIGHT;
+    this.scale.setGameSize(width, height);
+    this.cameras.main.setSize(width, height).setBounds(0, 0, width, height).setZoom(1).centerOn(width / 2, height / 2);
+    this.world.setRotation(portrait ? -Math.PI / 2 : 0).setPosition(0, portrait ? GAME_WIDTH : 0);
+    for (const child of this.world.list) {
+      if (child instanceof Phaser.GameObjects.Text) {
+        child.setRotation(-this.world.rotation);
+      }
+    }
+  }
+
+  private toScreen(point: { x: number; y: number }): { x: number; y: number } {
+    return this.portrait ? { x: point.y, y: GAME_WIDTH - point.x } : point;
+  }
+
+  private updateObserverCamera(state: RunState, dt: number): void {
+    const camera = this.cameras.main;
+    const center = { x: camera.width / 2, y: camera.height / 2 };
+    let focus = center;
+    let zoom = 1;
+    if (this.portrait && state.phase === "planning") {
+      focus = this.toScreen(BOARD_CENTER);
+      zoom = PLANNING_ZOOM;
+    } else if (this.portrait && state.phase === "execution") {
+      const warning = state.simulation.barrages.find((barrage) => barrage.firedAge === undefined);
+      const boss = state.simulation.enemies.find((enemy) => enemy.kind === "boss");
+      if (warning) {
+        focus = this.toScreen({ x: warning.fromX - 120, y: warning.fromY });
+        zoom = OBSERVER_ZOOM;
+      } else if (boss && state.simulation.bossEncounter.introTimer > 0) {
+        focus = this.toScreen(boss);
+        zoom = OBSERVER_ZOOM;
+      }
+    }
+    const ease = Math.min(1, dt * 3);
+    const nextZoom = camera.zoom + (zoom - camera.zoom) * ease;
+    const current = { x: camera.midPoint.x, y: camera.midPoint.y };
+    camera.setZoom(nextZoom);
+    camera.centerOn(current.x + (focus.x - current.x) * ease, current.y + (focus.y - current.y) * ease);
+  }
+
+  private emitBattleFeedback(state: RunState): void {
+    const simulation = state.simulation;
+    const next: FeedbackSnapshot = {
+      warningIds: new Set(simulation.barrages.filter((barrage) => barrage.firedAge === undefined).map((barrage) => barrage.id)),
+      firedIds: new Set(simulation.barrages.filter((barrage) => barrage.firedAge !== undefined).map((barrage) => barrage.id)),
+      fighterIds: new Set(simulation.fighters.map((fighter) => fighter.id)),
+      announcement: simulation.announcement?.text,
+      calloutCount: simulation.callouts.length,
+      launching: state.phase === "execution" && simulation.launchCountdown > 0,
+      bossIntro: simulation.bossEncounter.introTimer > 0,
+      hull: state.ship.hull,
+    };
+    const previous = this.feedbackSnapshot;
+    this.feedbackSnapshot = next;
+    if (!previous || state.phase !== "execution") {
+      return;
+    }
+
+    if (next.launching && !previous.launching) {
+      playSound("launch");
+      haptic(25);
+    }
+    if ([...next.warningIds].some((id) => !previous.warningIds.has(id))) {
+      playSound("lance_warning");
+      haptic(20);
+    }
+    if ([...next.firedIds].some((id) => !previous.firedIds.has(id))) {
+      playSound("lance_fire");
+      haptic([40, 30, 60]);
+      this.cameras.main.shake(220, 0.006);
+    }
+    for (const fighter of simulation.fighters) {
+      if (previous.fighterIds.has(fighter.id)) {
+        continue;
+      }
+      const port = this.findSlot(state.ship.slots, fighter.portSlotId);
+      if (port) {
+        this.launchFlashes.push({ x: port.x, y: port.y, age: 0, color: fighter.color });
+      }
+      playSound("fighter", 120);
+    }
+    if (next.announcement && next.announcement !== previous.announcement) {
+      playSound("announce");
+    }
+    if (next.calloutCount > previous.calloutCount) {
+      playSound("dodge");
+    }
+    if (next.bossIntro && !previous.bossIntro) {
+      haptic([80, 40, 80]);
+    }
+    if (previous.hull - next.hull >= BIG_HIT_HULL) {
+      playSound("hit", 150);
+      this.cameras.main.shake(160, 0.004);
+    }
+  }
+
+  private drawLaunchFlashes(): void {
+    for (const flash of this.launchFlashes) {
+      const progress = flash.age / LAUNCH_FLASH_TIME;
+      const size = SLOT_SIZE * (1 + progress * 0.35);
+      this.graphics.lineStyle(4 - progress * 3, flash.color, 0.9 * (1 - progress));
+      this.graphics.strokeRoundedRect(flash.x - size / 2, flash.y - size / 2, size, size, 16);
+      this.graphics.fillStyle(0xffffff, 0.35 * (1 - progress));
+      this.graphics.fillRoundedRect(flash.x - SLOT_SIZE / 2, flash.y - SLOT_SIZE / 2, SLOT_SIZE, SLOT_SIZE, 14);
+    }
+  }
+
+  private drawTapMarker(state: RunState): void {
+    if (!state.tutorial.active || state.phase !== "planning" || getTutorialHandTarget(state)) {
+      return;
+    }
+    const step = state.tutorial.stepId;
+    if (!["place_solar_collector", "place_mineral_drill", "place_third_module", "merge_bot"].includes(step)) {
+      return;
+    }
+    const targetId = [...this.getTutorialSlotTargets(state)].find((slotId) => !state.ui.selectedSlotIds.includes(slotId));
+    const slot = targetId ? this.findSlot(state.ship.slots, targetId) : undefined;
+    if (!slot) {
+      return;
+    }
+    const pulse = (this.visualTime * 1.6) % 1;
+    this.graphics.lineStyle(4, 0xffffff, 0.8 * (1 - pulse));
+    this.graphics.strokeCircle(slot.x, slot.y, 14 + pulse * 30);
+    this.graphics.fillStyle(0xffffff, 0.9);
+    this.graphics.fillCircle(slot.x, slot.y, 9 + Math.sin(this.visualTime * 8) * 1.5);
+    this.graphics.fillStyle(0xf0cf7d, 1);
+    this.graphics.fillCircle(slot.x, slot.y, 5);
+  }
+
+  private updateSlotLabels(state: RunState): void {
+    for (const slot of state.ship.slots) {
+      this.slotLabelTexts.get(slot.id)?.setColor(state.ui.selectedSlotIds.includes(slot.id) ? "#dfffee" : "#9cc1cf");
+    }
+  }
+
+  private drawCallouts(state: RunState): void {
+    this.calloutTexts.forEach((text, index) => {
+      const callout = state.phase === "execution" ? state.simulation.callouts[index] : undefined;
+      if (!callout) {
+        text.setVisible(false);
+        return;
+      }
+      const pop = Math.min(1, callout.age / 0.12);
+      text
+        .setText(callout.text)
+        .setColor(`#${callout.color.toString(16).padStart(6, "0")}`)
+        .setPosition(callout.x, callout.y)
+        .setScale(0.6 + pop * 0.5 - Math.max(0, callout.age - 0.12) * 0.1)
+        .setAlpha(Math.min(1, 2.4 - callout.age * 2))
+        .setVisible(true);
+    });
   }
 }
