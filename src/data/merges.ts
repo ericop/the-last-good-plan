@@ -21,6 +21,7 @@ const MODULE_ORDER: MergeableModuleId[] = [
   "pulse_cannon",
   "cargo_core",
   "repair_node",
+  "booster",
 ];
 
 const MODULE_TRAITS: Record<MergeableModuleId, ModuleTrait> = {
@@ -95,6 +96,18 @@ const MODULE_TRAITS: Record<MergeableModuleId, ModuleTrait> = {
     range: 18,
     salvage: 0.5,
     defense: 1.5,
+  },
+  booster: {
+    label: "Booster",
+    tags: ["booster", "mobility"],
+    hp: 4,
+    speed: 14,
+    mining: 0.4,
+    attack: 0.8,
+    support: 0.4,
+    range: 4,
+    salvage: 0.2,
+    defense: 0.6,
   },
 };
 
@@ -300,6 +313,7 @@ function countModules(modules: readonly MergeableModuleId[]): Record<MergeableMo
       pulse_cannon: 0,
       cargo_core: 0,
       repair_node: 0,
+      booster: 0,
     } satisfies Record<MergeableModuleId, number>,
   );
 }
@@ -503,6 +517,8 @@ function getBehaviorNotes(modules: readonly MergeableModuleId[]): string[] {
   if (counts.pulse_cannon === 2) notes.push("Twin pulse emitters give it sharp threat pressure.");
   if (counts.cargo_core === 2) notes.push("Extra cargo framing turns more debris into scrap.");
   if (counts.repair_node === 2) notes.push("Twin repair nodes let it stabilize attrition over time.");
+  if (counts.booster === 2) notes.push("Twin boosters let it slip out of two of every three lance shots.");
+  else if (has("booster")) notes.push("Its booster gives it a one-in-three chance to dodge lance fire.");
 
   if (has("solar_collector") && has("mineral_drill")) notes.push("It reaches the moon quickly and turns time into minerals.");
   if (has("solar_collector") && has("shield_emitter")) notes.push("Its solar-fed shielding helps it stay calm under pressure.");

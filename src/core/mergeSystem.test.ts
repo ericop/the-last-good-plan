@@ -13,6 +13,7 @@ const MODULE_IDS: ModuleId[] = [
   "pulse_cannon",
   "cargo_core",
   "repair_node",
+  "booster",
 ];
 
 function createSaveData(): SaveData {
@@ -89,7 +90,7 @@ function getValidTriples(): ModuleId[][] {
 
 describe("expanded merge system", () => {
   it("covers every valid recipe with unique ids and names", () => {
-    expect(MERGE_RECIPES).toHaveLength(65);
+    expect(MERGE_RECIPES).toHaveLength(98);
     expect(new Set(MERGE_RECIPES.map((recipe) => recipe.id)).size).toBe(MERGE_RECIPES.length);
     expect(new Set(MERGE_RECIPES.map((recipe) => recipe.resultName)).size).toBe(MERGE_RECIPES.length);
 

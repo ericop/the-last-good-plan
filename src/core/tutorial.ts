@@ -126,6 +126,7 @@ export function captureTutorialSnapshot(state: RunState): TutorialSnapshot {
       pulse_cannon: countModules(state, "pulse_cannon"),
       cargo_core: countModules(state, "cargo_core"),
       repair_node: countModules(state, "repair_node"),
+      booster: countModules(state, "booster"),
       launch_port: countModules(state, "launch_port"),
     },
   };

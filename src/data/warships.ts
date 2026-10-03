@@ -13,6 +13,7 @@ export const WARSHIP_DEFINITIONS: WarshipDefinition[] = [
     weapons: [
       { name: "Burst Laser", kind: "laser", chargeTime: 6, shots: 2, damage: 5 },
       { name: "Breach Missile", kind: "missile", chargeTime: 12, shots: 1, damage: 9 },
+      { name: "Siege Lance", kind: "beam", chargeTime: 13, shots: 1, damage: 22, warning: 2.2, width: 54 },
     ],
   },
   {
@@ -39,6 +40,7 @@ export const WARSHIP_DEFINITIONS: WarshipDefinition[] = [
     weapons: [
       { name: "Ion Repeater", kind: "laser", chargeTime: 3.5, shots: 1, damage: 5 },
       { name: "Cutter Missile", kind: "missile", chargeTime: 14, shots: 2, damage: 7 },
+      { name: "Ion Lance", kind: "beam", chargeTime: 10, shots: 1, damage: 20, warning: 1.8, width: 60 },
     ],
   },
 ];

@@ -2,11 +2,14 @@ import type { FighterInstance, FighterKind, RunState, ShipSlot } from "../types/
 import { countAdjacentWithModule, getGlobalArtifactMultiplier } from "./utils";
 
 export const PORT_FIRST_LAUNCH_DELAY = 1.2;
+export const LAUNCH_BOOST_TIME = 0.7;
 
-const FIGHTER_BASE: Record<FighterKind, Omit<FighterInstance, "id" | "portSlotId" | "kind" | "x" | "y" | "heading" | "orbit" | "maxHp">> = {
-  interceptor: { color: 0x9cc8ff, hp: 24, speed: 88, attack: 4, range: 72, mining: 0, support: 0 },
-  skiff: { color: 0x7fe3e8, hp: 16, speed: 72, attack: 1.2, range: 60, mining: 1.6, support: 0 },
-  tender: { color: 0xa6f0a2, hp: 16, speed: 74, attack: 0.8, range: 60, mining: 0, support: 2 },
+type FighterBase = Pick<FighterInstance, "color" | "hp" | "speed" | "attack" | "range" | "mining" | "support" | "dodge">;
+
+const FIGHTER_BASE: Record<FighterKind, FighterBase> = {
+  interceptor: { color: 0x9cc8ff, hp: 24, speed: 88, attack: 4, range: 72, mining: 0, support: 0, dodge: 0.35 },
+  skiff: { color: 0x7fe3e8, hp: 16, speed: 72, attack: 1.2, range: 60, mining: 1.6, support: 0, dodge: 0.2 },
+  tender: { color: 0xa6f0a2, hp: 16, speed: 74, attack: 0.8, range: 60, mining: 0, support: 2, dodge: 0.25 },
 };
 
 export interface PortLoadout {
@@ -15,6 +18,7 @@ export interface PortLoadout {
   capacity: number;
   hp: number;
   attack: number;
+  dodge: number;
 }
 
 export function isLaunchPortUnlocked(state: RunState): boolean {
@@ -34,6 +38,7 @@ export function getPortLoadout(state: RunState, slot: ShipSlot): PortLoadout {
     capacity: 2 + Math.floor((level - 1) / 2),
     hp: Math.round(base.hp * scale * (adjacent("shield_emitter") ? 1.4 : 1)),
     attack: base.attack * scale * (adjacent("pulse_cannon") ? 1.35 : 1) * getGlobalArtifactMultiplier(state, "attackMultiplier"),
+    dodge: Math.min(0.75, base.dodge + (level - 1) * 0.04),
   };
 }
 
@@ -56,5 +61,7 @@ export function createFighter(state: RunState, slot: ShipSlot, loadout: PortLoad
     range: base.range,
     mining: base.mining * scale,
     support: base.support * scale,
+    dodge: loadout.dodge,
+    launchBoost: LAUNCH_BOOST_TIME,
   };
 }

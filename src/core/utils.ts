@@ -80,6 +80,25 @@ export function createWeaponStates(weapons: ShipWeaponDefinition[], damageScale:
   }));
 }
 
+export function closestPointOnSegment(
+  point: { x: number; y: number },
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): { x: number; y: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared > 0 ? clamp(((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared, 0, 1) : 0;
+  return { x: from.x + dx * t, y: from.y + dy * t };
+}
+
+export const DODGE_PER_BOOSTER = 0.33;
+
+export function getBotDodge(bot: BotInstance): number {
+  const boosters = getRecipeById(bot.recipeId)?.modules.filter((moduleId) => moduleId === "booster").length ?? 0;
+  return boosters * DODGE_PER_BOOSTER;
+}
+
 export function makeEnemyId(): string {
   return `enemy_${Math.random().toString(36).slice(2, 10)}`;
 }

@@ -55,6 +55,16 @@ export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
     icon: "R",
     fabricationCost: { solar: 10, minerals: 8, scrap: 0 },
   },
+  booster: {
+    id: "booster",
+    name: "Booster",
+    shortName: "BST",
+    description:
+      "Thruster block. On the ship it fires a pulse that shoves nearby small enemies back. Merged into a bot, each Booster gives 33% dodge against telegraphed lance fire.",
+    color: 0xf2a6ff,
+    icon: "B",
+    fabricationCost: { solar: 12, minerals: 8, scrap: 0 },
+  },
   launch_port: {
     id: "launch_port",
     name: "Launch Port",

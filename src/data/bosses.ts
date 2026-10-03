@@ -11,7 +11,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     attack: 24,
     range: 132,
     weapons: [
-      { name: "Tyrant Lance", kind: "laser", chargeTime: 4.5, shots: 2, damage: 8 },
+      { name: "Tyrant Lance", kind: "beam", chargeTime: 9, shots: 1, damage: 30, warning: 2, width: 72 },
       { name: "Signal Torpedo", kind: "missile", chargeTime: 10, shots: 1, damage: 14 },
     ],
     behaviors: [
@@ -48,7 +48,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     attack: 30,
     range: 138,
     weapons: [
-      { name: "Null Beam", kind: "laser", chargeTime: 4, shots: 2, damage: 7 },
+      { name: "Null Beam", kind: "beam", chargeTime: 8, shots: 1, damage: 26, warning: 1.8, width: 64 },
       { name: "Shepherd Missile", kind: "missile", chargeTime: 9, shots: 1, damage: 12 },
     ],
     behaviors: [

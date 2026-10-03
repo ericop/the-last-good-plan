@@ -1,8 +1,10 @@
 import { DOCTRINES } from "../data/doctrines";
 import { ENEMY_SPAWN_POINT, LANE_YS, OBJECTIVE_POINT, SHIP_CENTER } from "../game/constants";
 import type {
+  BarrageState,
   BotInstance,
   EnemyInstance,
+  EvadeOrder,
   FighterInstance,
   ModuleId,
   RewardSource,
@@ -16,8 +18,11 @@ import { createFighter, getPortLoadout, PORT_FIRST_LAUNCH_DELAY } from "./hangar
 import {
   addMessage,
   addToPool,
+  clamp,
+  closestPointOnSegment,
   countAdjacentWithModule,
   distance,
+  getBotDodge,
   getDoctrineArtifactBonus,
   getGlobalArtifactMultiplier,
   getRecipeById,
@@ -31,6 +36,14 @@ import { beginBossEncounter, getActiveBoss, getBossDamageProfile, handleBossDefe
 const CANNON_CHARGE_TIME = 1.4;
 const CANNON_RANGE = 300;
 const IMPACT_LIFETIME = 0.4;
+const EVADE_SPEED_MULTIPLIER = 2.2;
+const LAUNCH_BOOST_SPEED_MULTIPLIER = 1.8;
+const BARRAGE_FLASH_TIME = 0.35;
+const BARRAGE_SHIP_RADIUS = 150;
+const BOOSTER_PULSE_INTERVAL = 4;
+const BOOSTER_PULSE_RADIUS = 210;
+const BOOSTER_PUSH_DISTANCE = 80;
+const KNOCKBACK_TIME = 0.35;
 
 interface DamageSource {
   kind: "module" | "bot" | "fighter";
@@ -253,6 +266,29 @@ function firePlayerBolt(state: RunState, slot: ShipSlot, target: EnemyInstance, 
   });
 }
 
+function tickBoosterPulse(state: RunState, slot: ShipSlot, dt: number): void {
+  const charge = Math.min(BOOSTER_PULSE_INTERVAL, (state.simulation.moduleTimers[slot.id] ?? 0) + dt);
+  state.simulation.moduleTimers[slot.id] = charge;
+  const pushable = state.simulation.enemies.filter(
+    (enemy) => enemy.hp > 0 && !isCapitalShip(enemy) && distance(enemy, SHIP_CENTER) < BOOSTER_PULSE_RADIUS,
+  );
+  if (charge < BOOSTER_PULSE_INTERVAL || pushable.length === 0) {
+    return;
+  }
+  state.simulation.moduleTimers[slot.id] = 0;
+  for (const enemy of pushable) {
+    const away = Math.hypot(enemy.x - SHIP_CENTER.x, enemy.y - SHIP_CENTER.y) || 1;
+    const falloff = 1 - (away / BOOSTER_PULSE_RADIUS) * 0.5;
+    const push = BOOSTER_PUSH_DISTANCE * falloff * (enemy.kind === "mini_boss" ? 0.4 : 1);
+    enemy.knockback = {
+      vx: ((enemy.x - SHIP_CENTER.x) / away) * (push / KNOCKBACK_TIME),
+      vy: ((enemy.y - SHIP_CENTER.y) / away) * (push / KNOCKBACK_TIME),
+      timer: KNOCKBACK_TIME,
+    };
+  }
+  addImpact(state, SHIP_CENTER.x, SHIP_CENTER.y, BOOSTER_PULSE_RADIUS * 0.8, 0xf2a6ff);
+}
+
 function tickLaunchPort(state: RunState, slot: ShipSlot, dt: number): void {
   if (state.ship.upgrades.hangar_tech < 1) {
     return;
@@ -321,6 +357,9 @@ function applyPassiveModules(state: RunState, dt: number): void {
       case "launch_port":
         tickLaunchPort(state, slot, dt);
         break;
+      case "booster":
+        tickBoosterPulse(state, slot, dt);
+        break;
       case "repair_node": {
         const heal = 2.4 * dt * supportArtifact * (1 + state.ship.upgrades.support_bay * 0.16);
         const damagedBot = state.ship.bots
@@ -362,8 +401,24 @@ function chooseEnemyTarget(state: RunState, bot: BotInstance): EnemyInstance | u
   return sorted[0];
 }
 
+function followEvade(unit: { x: number; y: number; evade?: EvadeOrder }, speed: number, dt: number): boolean {
+  if (!unit.evade) {
+    return false;
+  }
+  unit.evade.timer -= dt;
+  if (unit.evade.timer <= 0) {
+    unit.evade = undefined;
+    return false;
+  }
+  moveToward(unit, unit.evade, speed * EVADE_SPEED_MULTIPLIER, dt);
+  return true;
+}
+
 function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
   bot.targetId = undefined;
+  if (followEvade(bot, bot.speed, dt)) {
+    return;
+  }
   const doctrine = DOCTRINES[state.doctrine];
   const multipliers = getBotMultipliers(state, bot);
   const enemiesNearShip = state.simulation.enemies.filter((enemy) => distance(enemy, SHIP_CENTER) < 180).length;
@@ -440,7 +495,9 @@ function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
     moveToward(bot, SHIP_CENTER, bot.speed * 0.7, dt);
     return;
   }
-  moveToward(bot, target, bot.speed * (0.9 + state.commitmentBonus * 0.35), dt);
+  if (distance(bot, target) > bot.range * 0.8) {
+    moveToward(bot, target, bot.speed * (0.9 + state.commitmentBonus * 0.35), dt);
+  }
   if (distance(bot, target) <= bot.range) {
     const damage = bot.attack * multipliers.attack * dt;
     bot.targetId = target.id;
@@ -449,10 +506,22 @@ function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
   }
 }
 
+function updateFighterHeading(fighter: FighterInstance, startX: number, startY: number): void {
+  if (Math.hypot(fighter.x - startX, fighter.y - startY) > 0.01) {
+    fighter.heading = Math.atan2(fighter.y - startY, fighter.x - startX);
+  }
+}
+
 function applyFighterBehavior(state: RunState, fighter: FighterInstance, dt: number): void {
   const startX = fighter.x;
   const startY = fighter.y;
   fighter.targetId = undefined;
+  const speed = fighter.speed * (fighter.launchBoost > 0 ? LAUNCH_BOOST_SPEED_MULTIPLIER : 1);
+  fighter.launchBoost = Math.max(0, fighter.launchBoost - dt);
+  if (followEvade(fighter, fighter.speed, dt)) {
+    updateFighterHeading(fighter, startX, startY);
+    return;
+  }
   const moonActive = state.simulation.objective.integrity > 0;
   const shipDamaged = state.ship.hull < state.ship.maxHull || state.ship.shield < state.ship.maxShield;
   const woundedBot = state.ship.bots
@@ -461,7 +530,7 @@ function applyFighterBehavior(state: RunState, fighter: FighterInstance, dt: num
 
   if (fighter.kind === "skiff" && moonActive) {
     const berth = { x: OBJECTIVE_POINT.x + Math.cos(fighter.orbit) * 40, y: OBJECTIVE_POINT.y + Math.sin(fighter.orbit) * 40 };
-    moveToward(fighter, berth, fighter.speed, dt);
+    moveToward(fighter, berth, speed, dt);
     if (distance(fighter, OBJECTIVE_POINT) <= 64) {
       const mined = fighter.mining * dt * getGlobalArtifactMultiplier(state, "miningMultiplier");
       state.simulation.objective.integrity = Math.max(0, state.simulation.objective.integrity - mined);
@@ -469,7 +538,7 @@ function applyFighterBehavior(state: RunState, fighter: FighterInstance, dt: num
     }
   } else if (fighter.kind === "tender" && (woundedBot || shipDamaged)) {
     const patient = woundedBot ?? SHIP_CENTER;
-    moveToward(fighter, patient, fighter.speed, dt);
+    moveToward(fighter, patient, speed, dt);
     if (distance(fighter, patient) <= (woundedBot ? fighter.range : 90)) {
       const heal = fighter.support * dt * getGlobalArtifactMultiplier(state, "supportMultiplier");
       if (woundedBot) {
@@ -492,7 +561,7 @@ function applyFighterBehavior(state: RunState, fighter: FighterInstance, dt: num
     const target = nearShip ?? strikeTarget;
     if (target) {
       if (distance(fighter, target) > fighter.range * 0.7) {
-        moveToward(fighter, target, fighter.speed, dt);
+        moveToward(fighter, target, speed, dt);
       }
       if (distance(fighter, target) <= fighter.range) {
         fighter.targetId = target.id;
@@ -503,21 +572,115 @@ function applyFighterBehavior(state: RunState, fighter: FighterInstance, dt: num
       moveToward(
         fighter,
         { x: SHIP_CENTER.x + Math.cos(fighter.orbit) * 195, y: SHIP_CENTER.y + Math.sin(fighter.orbit) * 195 },
-        fighter.speed,
+        speed,
         dt,
       );
     }
   }
 
-  if (Math.hypot(fighter.x - startX, fighter.y - startY) > 0.01) {
-    fighter.heading = Math.atan2(fighter.y - startY, fighter.x - startX);
+  updateFighterHeading(fighter, startX, startY);
+}
+
+function isInBarrage(barrage: BarrageState, unit: { x: number; y: number }, margin: number): boolean {
+  const closest = closestPointOnSegment(unit, { x: barrage.fromX, y: barrage.fromY }, { x: barrage.toX, y: barrage.toY });
+  return distance(unit, closest) <= barrage.width / 2 + margin;
+}
+
+function planEvade(barrage: BarrageState, unit: { x: number; y: number }): EvadeOrder {
+  const closest = closestPointOnSegment(unit, { x: barrage.fromX, y: barrage.fromY }, { x: barrage.toX, y: barrage.toY });
+  let normalX = unit.x - closest.x;
+  let normalY = unit.y - closest.y;
+  const offset = Math.hypot(normalX, normalY);
+  if (offset < 1) {
+    const length = Math.hypot(barrage.toX - barrage.fromX, barrage.toY - barrage.fromY) || 1;
+    const side = Math.random() < 0.5 ? 1 : -1;
+    normalX = (-(barrage.toY - barrage.fromY) / length) * side;
+    normalY = ((barrage.toX - barrage.fromX) / length) * side;
+  } else {
+    normalX /= offset;
+    normalY /= offset;
   }
+  const clearance = barrage.width / 2 + 36;
+  return {
+    x: clamp(closest.x + normalX * clearance, 30, 930),
+    y: clamp(closest.y + normalY * clearance, 60, 580),
+    timer: barrage.timer + 0.3,
+  };
+}
+
+function fireBarrage(state: RunState, barrage: BarrageState): void {
+  let hits = 0;
+  for (const bot of state.ship.bots) {
+    if (bot.hp > 0 && isInBarrage(barrage, bot, 10)) {
+      bot.hp = Math.max(0, bot.hp - barrage.damage / getBotMultipliers(state, bot).defense);
+      hits += 1;
+    }
+  }
+  for (const fighter of state.simulation.fighters) {
+    if (fighter.hp > 0 && isInBarrage(barrage, fighter, 10)) {
+      fighter.hp = Math.max(0, fighter.hp - barrage.damage);
+      hits += 1;
+    }
+  }
+  const nearestToShip = closestPointOnSegment(SHIP_CENTER, { x: barrage.fromX, y: barrage.fromY }, { x: barrage.toX, y: barrage.toY });
+  if (distance(SHIP_CENTER, nearestToShip) <= BARRAGE_SHIP_RADIUS) {
+    damageShip(state, barrage.damage * 0.6);
+    addImpact(state, nearestToShip.x, nearestToShip.y, 40, 0xff2850);
+  }
+  const dodged = barrage.noticed.length - hits;
+  if (barrage.noticed.length > 0) {
+    addMessage(state, `${barrage.name} fired: ${Math.max(0, dodged)} dodged, ${hits} hit.`);
+  }
+}
+
+function tickBarrages(state: RunState, dt: number): boolean {
+  let fired = false;
+  const units: Array<BotInstance | FighterInstance> = [...state.ship.bots, ...state.simulation.fighters];
+  state.simulation.barrages = state.simulation.barrages.filter((barrage) => {
+    if (barrage.firedAge !== undefined) {
+      barrage.firedAge += dt;
+      return barrage.firedAge < BARRAGE_FLASH_TIME;
+    }
+    if (!state.simulation.enemies.some((enemy) => enemy.id === barrage.sourceId && enemy.hp > 0)) {
+      return false;
+    }
+
+    for (const unit of units) {
+      if (unit.hp <= 0 || barrage.noticed.includes(unit.id) || !isInBarrage(barrage, unit, 18)) {
+        continue;
+      }
+      barrage.noticed.push(unit.id);
+      const dodge = "recipeId" in unit ? getBotDodge(unit) : unit.dodge;
+      if (Math.random() < dodge) {
+        unit.evade = planEvade(barrage, unit);
+      }
+    }
+
+    barrage.timer -= dt;
+    if (barrage.timer <= 0) {
+      fireBarrage(state, barrage);
+      barrage.firedAge = 0;
+      fired = true;
+    }
+    return true;
+  });
+  return fired;
 }
 
 function applyEnemyBehavior(state: RunState, dt: number): void {
   const fighters = state.simulation.fighters;
   for (const enemy of [...state.simulation.enemies]) {
     if (enemy.hp <= 0) {
+      continue;
+    }
+
+    if (enemy.knockback) {
+      enemy.x += enemy.knockback.vx * dt;
+      enemy.y += enemy.knockback.vy * dt;
+      enemy.knockback.timer -= dt;
+      if (enemy.knockback.timer <= 0) {
+        enemy.knockback = undefined;
+      }
       continue;
     }
 
@@ -691,6 +854,9 @@ export function stepSimulation(state: RunState, dt: number): boolean {
   }
   spawnPendingEnemies(state);
   ageImpacts(state, dt);
+  if (tickBarrages(state, dt)) {
+    majorUpdate = true;
+  }
 
   tickBossEncounter(state, dt);
   if (state.simulation.bossEncounter.introTimer > 0) {

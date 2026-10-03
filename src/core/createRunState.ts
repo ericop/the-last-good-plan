@@ -51,6 +51,7 @@ function createSimulationState(cycle: number): SimulationState {
     pendingSpawns: [],
     enemies: [],
     projectiles: [],
+    barrages: [],
     fighters: [],
     impacts: [],
     moduleTimers: {},

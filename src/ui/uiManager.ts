@@ -7,7 +7,7 @@ import type { GameController } from "../core/gameController";
 import { getDiscoveryDescriptor, getMergePreviewFromModules } from "../core/discovery";
 import { isLaunchPortUnlocked } from "../core/hangar";
 import { getMissionReadiness, getPhaseLabel, getTutorialStepView } from "../core/tutorial";
-import { getArtifactById, getBotCapacity, getSlotById } from "../core/utils";
+import { getArtifactById, getBotCapacity, getBotDodge, getSlotById } from "../core/utils";
 import type { DockPanelId, FabricationOptionId, ModuleId, RunState, UpgradeId } from "../types/gameTypes";
 import { applyButtonHoverEffect, applyPanelGlow, pulseCounter } from "./effects";
 
@@ -366,7 +366,7 @@ export class UIManager {
                 <article class="bot-card">
                   <strong>${bot.name}</strong>
                   <span>${bot.role} bot</span>
-                  <small>HP ${Math.round(bot.hp)}/${bot.maxHp} | Mine ${Math.round(bot.contribution.mined)} | Damage ${Math.round(bot.contribution.damage)}</small>
+                  <small>HP ${Math.round(bot.hp)}/${bot.maxHp}${getBotDodge(bot) > 0 ? ` | Dodge ${Math.round(getBotDodge(bot) * 100)}%` : ""} | Mine ${Math.round(bot.contribution.mined)} | Damage ${Math.round(bot.contribution.damage)}</small>
                 </article>
               `,
             )

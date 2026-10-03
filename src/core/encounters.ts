@@ -147,7 +147,49 @@ export function getLaneWaypoint(enemy: EnemyInstance): { x: number; y: number } 
   return enemy.x > LANE_TURN_X ? { x: LANE_TURN_X, y: enemy.y } : SHIP_CENTER;
 }
 
+const BEAM_LENGTH = 900;
+const BEAM_EMITTER_OFFSET = 58;
+
+function pickBarrageAim(state: RunState, enemy: EnemyInstance): { x: number; y: number } {
+  const units = [...state.ship.bots, ...state.simulation.fighters].filter(
+    (unit) => unit.hp > 0 && distance(unit, enemy) > BEAM_EMITTER_OFFSET + 12,
+  );
+  const cluster = units
+    .map((unit) => ({ unit, crowd: units.filter((other) => distance(other, unit) < 70).length }))
+    .sort((left, right) => right.crowd - left.crowd || distance(left.unit, enemy) - distance(right.unit, enemy))[0];
+  return cluster ? { x: cluster.unit.x, y: cluster.unit.y } : SHIP_CENTER;
+}
+
+function lockBarrage(state: RunState, enemy: EnemyInstance, weapon: ShipWeaponDefinition): void {
+  const aim = pickBarrageAim(state, enemy);
+  const reach = Math.hypot(aim.x - enemy.x, aim.y - enemy.y) || 1;
+  const from = {
+    x: enemy.x + ((aim.x - enemy.x) / reach) * BEAM_EMITTER_OFFSET,
+    y: enemy.y + ((aim.y - enemy.y) / reach) * BEAM_EMITTER_OFFSET,
+  };
+  const length = Math.hypot(aim.x - from.x, aim.y - from.y) || 1;
+  const warning = weapon.warning ?? 2;
+  state.simulation.barrages.push({
+    id: `${enemy.id}_${weapon.name}_${state.simulation.elapsed.toFixed(2)}`,
+    sourceId: enemy.id,
+    name: weapon.name,
+    fromX: from.x,
+    fromY: from.y,
+    toX: from.x + ((aim.x - from.x) / length) * BEAM_LENGTH,
+    toY: from.y + ((aim.y - from.y) / length) * BEAM_LENGTH,
+    width: weapon.width ?? 56,
+    damage: weapon.damage,
+    warning,
+    timer: warning,
+    noticed: [],
+  });
+}
+
 function fireVolley(state: RunState, enemy: EnemyInstance, weapon: ShipWeaponDefinition): void {
+  if (weapon.kind === "beam") {
+    lockBarrage(state, enemy, weapon);
+    return;
+  }
   for (let shot = 0; shot < weapon.shots; shot += 1) {
     const projectile: Projectile = {
       id: `${enemy.id}_${weapon.name}_${state.simulation.elapsed.toFixed(2)}_${shot}`,
@@ -186,6 +228,9 @@ export function tickCapitalShip(
     if (weapon.charge >= weapon.chargeTime) {
       weapon.charge = 0;
       fireVolley(state, enemy, weapon);
+      if (weapon.kind === "beam") {
+        events.push(`${enemy.name} is charging its ${weapon.name}. Nimble units may slip out of the line.`);
+      }
     }
   }
 

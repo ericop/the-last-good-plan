@@ -12,7 +12,19 @@ import {
   type SlotView,
 } from "../game/effects/assemblyEffects";
 import { createStarfield, drawAmbientPanel, drawMechanicalHalo, type StarfieldHandle } from "../game/effects/ambientVisuals";
-import type { BotInstance, EnemyInstance, EpicModuleId, FighterInstance, ModuleId, RunState, ShipSlot } from "../types/gameTypes";
+import { BoosterTrails, type BoosterEmitter } from "../game/effects/boosterTrails";
+import type {
+  BarrageState,
+  BotInstance,
+  EnemyInstance,
+  EpicModuleId,
+  FighterInstance,
+  ModuleId,
+  RunState,
+  ShipSlot,
+} from "../types/gameTypes";
+
+const BARRAGE_RED = 0xff2850;
 
 interface VisualSnapshot {
   phase: RunState["phase"];
@@ -26,6 +38,9 @@ interface VisualSnapshot {
 export class RunScene extends Phaser.Scene {
   private controller!: GameController;
   private graphics!: Phaser.GameObjects.Graphics;
+  private boosterGraphics!: Phaser.GameObjects.Graphics;
+  private boosterTrails = new BoosterTrails();
+  private barrageAlertTexts: Phaser.GameObjects.Text[] = [];
   private slotLabelTexts = new Map<string, Phaser.GameObjects.Text>();
   private slotCodeTexts = new Map<string, Phaser.GameObjects.Text>();
   private threatTexts: Phaser.GameObjects.Text[] = [];
@@ -47,6 +62,7 @@ export class RunScene extends Phaser.Scene {
   create(): void {
     this.controller = this.registry.get("controller") as GameController;
     this.graphics = this.add.graphics();
+    this.boosterGraphics = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
     this.starfield = createStarfield(this, { width: GAME_WIDTH, height: GAME_HEIGHT });
     this.assemblyEffects = new AssemblyEffectsManager(this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -139,6 +155,16 @@ export class RunScene extends Phaser.Scene {
       .setDepth(10)
       .setVisible(false);
 
+    for (let index = 0; index < 4; index += 1) {
+      this.barrageAlertTexts.push(
+        this.add
+          .text(0, 0, "!", { fontFamily: "system-ui, sans-serif", fontSize: "26px", fontStyle: "bold", color: "#ff2850" })
+          .setOrigin(0.5)
+          .setDepth(4)
+          .setVisible(false),
+      );
+    }
+
     this.input.keyboard?.on("keydown-SPACE", (event: KeyboardEvent) => {
       event.preventDefault();
       this.controller.dispatch({ type: "toggle_pause" });
@@ -154,6 +180,12 @@ export class RunScene extends Phaser.Scene {
     this.starfield.update(dt);
     this.controller.update(dt);
     const state = this.controller.getState();
+    const missionLive = state.phase === "execution" && !state.paused && !state.pendingReward;
+    if (state.phase !== "execution") {
+      this.boosterTrails.clear();
+    } else if (missionLive) {
+      this.boosterTrails.update(dt * state.executionSpeed, this.collectBoosterEmitters(state));
+    }
     this.syncAssemblyEffects(state);
     this.renderState(state);
     this.visualSnapshot = this.captureVisualSnapshot(state);
@@ -172,7 +204,10 @@ export class RunScene extends Phaser.Scene {
     this.drawFighters(state);
     this.drawEnemies(state);
     this.drawProjectiles(state);
+    this.drawBarrages(state);
     this.drawImpacts(state);
+    this.boosterGraphics.clear();
+    this.boosterTrails.draw(this.boosterGraphics);
     this.assemblyEffects.drawOverlay(this.graphics);
     this.updateTexts(state);
     this.drawOverlay(state);
@@ -373,7 +408,9 @@ export class RunScene extends Phaser.Scene {
     this.graphics.fillStyle(0xf1e8ca, 0.92);
     this.graphics.fillCircle(x + 18, y + 11, 3);
 
-    const telegraph = boss.kind === "boss" ? state.simulation.bossEncounter.telegraph : this.getWeaponTelegraph(boss);
+    const telegraph =
+      this.getBarrageTelegraph(state, boss) ??
+      (boss.kind === "boss" ? state.simulation.bossEncounter.telegraph : this.getWeaponTelegraph(boss));
     const telegraphText = telegraph ? ` | ${telegraph}` : "";
     this.phaseText.setDepth(2);
     this.bossLabelText.setText(`${boss.name}${telegraphText}`).setPosition(GAME_WIDTH / 2, y + 4).setVisible(true);
@@ -558,6 +595,102 @@ export class RunScene extends Phaser.Scene {
       this.graphics.lineStyle(2, impact.color, 0.8 * (1 - progress));
       this.graphics.strokeCircle(impact.x, impact.y, impact.size * (0.4 + progress * 0.8));
     }
+  }
+
+  private collectBoosterEmitters(state: RunState): BoosterEmitter[] {
+    const emitters: BoosterEmitter[] = [];
+    for (const bot of state.ship.bots) {
+      if (bot.evade) {
+        emitters.push({ id: bot.id, x: bot.x, y: bot.y, scale: 1 });
+      }
+    }
+    for (const fighter of state.simulation.fighters) {
+      if (fighter.evade || fighter.launchBoost > 0) {
+        emitters.push({ id: fighter.id, x: fighter.x, y: fighter.y, scale: 0.7 });
+      }
+    }
+    for (const enemy of state.simulation.enemies) {
+      if (enemy.holdX !== undefined && enemy.x > enemy.holdX + 0.5) {
+        emitters.push({ id: enemy.id, x: enemy.x, y: enemy.y, scale: 2.4 });
+      } else if (enemy.knockback) {
+        emitters.push({ id: enemy.id, x: enemy.x, y: enemy.y, scale: 0.9 });
+      }
+    }
+    return emitters;
+  }
+
+  private drawBarrages(state: RunState): void {
+    this.barrageAlertTexts.forEach((text) => text.setVisible(false));
+    let alertIndex = 0;
+    for (const barrage of state.simulation.barrages) {
+      if (barrage.firedAge === undefined) {
+        this.drawBarrageWarning(barrage);
+        const alert = this.barrageAlertTexts[alertIndex];
+        alertIndex += 1;
+        alert
+          ?.setPosition(barrage.fromX, barrage.fromY - 52)
+          .setScale(1 + Math.sin(this.visualTime * 14) * 0.08)
+          .setVisible(true);
+      } else {
+        this.drawBarrageFlash(barrage);
+      }
+    }
+  }
+
+  private getBarrageCorridor(barrage: BarrageState, width: number): Phaser.Geom.Point[] {
+    const length = Math.hypot(barrage.toX - barrage.fromX, barrage.toY - barrage.fromY) || 1;
+    const offsetX = (-(barrage.toY - barrage.fromY) / length) * (width / 2);
+    const offsetY = ((barrage.toX - barrage.fromX) / length) * (width / 2);
+    return [
+      new Phaser.Geom.Point(barrage.fromX + offsetX, barrage.fromY + offsetY),
+      new Phaser.Geom.Point(barrage.toX + offsetX, barrage.toY + offsetY),
+      new Phaser.Geom.Point(barrage.toX - offsetX, barrage.toY - offsetY),
+      new Phaser.Geom.Point(barrage.fromX - offsetX, barrage.fromY - offsetY),
+    ];
+  }
+
+  private drawBarrageWarning(barrage: BarrageState): void {
+    const progress = Phaser.Math.Clamp(1 - barrage.timer / barrage.warning, 0, 1);
+    const finalBlink = barrage.timer < 0.5 ? Math.abs(Math.sin(this.visualTime * 22)) : 1;
+    const corridor = this.getBarrageCorridor(barrage, barrage.width);
+    this.graphics.fillStyle(BARRAGE_RED, (0.04 + progress * 0.12) * finalBlink);
+    this.graphics.fillPoints(corridor, true);
+    this.graphics.lineStyle(1.5, BARRAGE_RED, 0.2 + progress * 0.4);
+    this.graphics.lineBetween(corridor[0].x, corridor[0].y, corridor[1].x, corridor[1].y);
+    this.graphics.lineBetween(corridor[3].x, corridor[3].y, corridor[2].x, corridor[2].y);
+
+    // Rainbow-Survivors' charge windup aim line: 11px dashes, 7px gaps, 5px wide at 85% alpha.
+    const length = Math.hypot(barrage.toX - barrage.fromX, barrage.toY - barrage.fromY) || 1;
+    const dirX = (barrage.toX - barrage.fromX) / length;
+    const dirY = (barrage.toY - barrage.fromY) / length;
+    this.graphics.lineStyle(5, BARRAGE_RED, 0.85);
+    for (let start = 0; start < length; start += 18) {
+      const end = Math.min(length, start + 11);
+      this.graphics.lineBetween(
+        barrage.fromX + dirX * start,
+        barrage.fromY + dirY * start,
+        barrage.fromX + dirX * end,
+        barrage.fromY + dirY * end,
+      );
+    }
+
+    this.graphics.fillStyle(BARRAGE_RED, 0.35 + progress * 0.4);
+    this.graphics.fillCircle(barrage.fromX, barrage.fromY, 5 + progress * 11);
+    this.graphics.fillStyle(0xffffff, 0.4 + progress * 0.5);
+    this.graphics.fillCircle(barrage.fromX, barrage.fromY, 2 + progress * 4);
+  }
+
+  private drawBarrageFlash(barrage: BarrageState): void {
+    const fade = 1 - Phaser.Math.Clamp((barrage.firedAge ?? 0) / 0.35, 0, 1);
+    this.graphics.fillStyle(0xff5e6c, 0.8 * fade);
+    this.graphics.fillPoints(this.getBarrageCorridor(barrage, barrage.width * (0.6 + fade * 0.4)), true);
+    this.graphics.fillStyle(0xffffff, 0.9 * fade);
+    this.graphics.fillPoints(this.getBarrageCorridor(barrage, 6 + fade * 6), true);
+  }
+
+  private getBarrageTelegraph(state: RunState, enemy: EnemyInstance): string | undefined {
+    const barrage = state.simulation.barrages.find((candidate) => candidate.sourceId === enemy.id && candidate.firedAge === undefined);
+    return barrage ? `${barrage.name.toUpperCase()} LOCKED ${Math.max(0, barrage.timer).toFixed(1)}s` : undefined;
   }
 
   private getWeaponTelegraph(enemy: EnemyInstance): string | undefined {

@@ -7,6 +7,7 @@ export type ModuleId =
   | "pulse_cannon"
   | "cargo_core"
   | "repair_node"
+  | "booster"
   | "launch_port";
 export type MergeableModuleId = Exclude<ModuleId, "launch_port">;
 export type EpicModuleId = "dawn_prism" | "war_forge" | "sainted_patch";
@@ -21,6 +22,12 @@ export type EnemyKind = "scavenger" | "dart" | "brute" | "mini_boss" | "warship"
 export type EncounterKind = "swarm" | "duel" | "boss";
 export type FighterKind = "interceptor" | "skiff" | "tender";
 export type ProjectileKind = "bolt" | "laser" | "missile";
+
+export interface EvadeOrder {
+  x: number;
+  y: number;
+  timer: number;
+}
 export type DockPanelId = "ship" | "build" | "bots" | "doctrine" | "log";
 export type BossBehavior =
   | { kind: "periodic_shield"; interval: number; amount: number }
@@ -116,10 +123,12 @@ export interface EpicModuleDefinition {
 
 export interface ShipWeaponDefinition {
   name: string;
-  kind: "laser" | "missile";
+  kind: "laser" | "missile" | "beam";
   chargeTime: number;
   shots: number;
   damage: number;
+  warning?: number;
+  width?: number;
 }
 
 export interface WarshipDefinition {
@@ -207,6 +216,7 @@ export interface BotInstance {
   epicModules: EpicModuleId[];
   cooldown: number;
   targetId?: string;
+  evade?: EvadeOrder;
   contribution: {
     mined: number;
     damage: number;
@@ -246,6 +256,7 @@ export interface EnemyInstance {
   holdX?: number;
   weapons?: ShipWeaponState[];
   launch?: { interval: number; count: number; timer: number };
+  knockback?: { vx: number; vy: number; timer: number };
   bossId?: string;
   warshipId?: string;
   bossBehaviorTimers?: Record<string, number>;
@@ -301,7 +312,26 @@ export interface FighterInstance {
   range: number;
   mining: number;
   support: number;
+  dodge: number;
+  launchBoost: number;
   targetId?: string;
+  evade?: EvadeOrder;
+}
+
+export interface BarrageState {
+  id: string;
+  sourceId: string;
+  name: string;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  width: number;
+  damage: number;
+  warning: number;
+  timer: number;
+  firedAge?: number;
+  noticed: string[];
 }
 
 export interface ImpactEffect {
@@ -400,6 +430,7 @@ export interface SimulationState {
   pendingSpawns: PendingSpawn[];
   enemies: EnemyInstance[];
   projectiles: Projectile[];
+  barrages: BarrageState[];
   fighters: FighterInstance[];
   impacts: ImpactEffect[];
   moduleTimers: Record<string, number>;

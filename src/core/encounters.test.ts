@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { createRunState, prepareExecutionState } from "./createRunState";
 import { createDefaultDiscoveryLog } from "./discovery";
-import { createCycleThreatSchedule, getEncounterKind, spawnWarship } from "./encounters";
-import { getPortLoadout } from "./hangar";
+import { createCycleThreatSchedule, createLaneEnemy, getEncounterKind, spawnWarship } from "./encounters";
+import { createFighter, getPortLoadout } from "./hangar";
 import { processCommand } from "./processCommand";
 import { stepSimulation } from "./simulation";
-import type { RunState, SaveData } from "../types/gameTypes";
+import { SHIP_CENTER } from "../game/constants";
+import { findRecipeByModules, getBotDodge } from "./utils";
+import type { BotInstance, RunState, SaveData } from "../types/gameTypes";
 
 function createSaveData(): SaveData {
   return {
@@ -171,5 +173,106 @@ describe("pulse cannons", () => {
 
     run(state, 1.2, 0.05);
     expect(warship.hp).toBeLessThan(hpBeforeImpact);
+  });
+});
+
+describe("telegraphed beam barrages", () => {
+  function setUpLance(state: RunState) {
+    state.simulation.threatCursor = state.simulation.upcomingThreats.length;
+    const warship = spawnWarship(3);
+    warship.x = warship.holdX!;
+    warship.attack = 0;
+    warship.launch = undefined;
+    warship.weapons = warship.weapons!.filter((weapon) => weapon.kind === "beam");
+    warship.weapons[0].charge = warship.weapons[0].chargeTime;
+    state.simulation.enemies.push(warship);
+    return warship;
+  }
+
+  function addFighter(state: RunState, id: string, dodge: number, x: number, y: number) {
+    state.ship.upgrades.hangar_tech = 1;
+    const fighter = createFighter(state, slot(state, "slot_0_0"), { ...getPortLoadout(state, slot(state, "slot_0_0")), dodge });
+    fighter.id = id;
+    fighter.x = x;
+    fighter.y = y;
+    fighter.launchBoost = 0;
+    state.simulation.fighters.push(fighter);
+    return fighter;
+  }
+
+  it("warns before the lance fires and lets dodging units slip out of the line", () => {
+    const state = createExecutionState(3);
+    const warship = setUpLance(state);
+    const nimble = addFighter(state, "nimble", 1, warship.x - 140, warship.y);
+    const clumsy = addFighter(state, "clumsy", 0, warship.x - 150, warship.y + 4);
+    clumsy.speed = 0;
+
+    stepSimulation(state, 0.05);
+    const barrage = state.simulation.barrages[0];
+    expect(barrage).toBeDefined();
+    expect(barrage.firedAge).toBeUndefined();
+    expect(nimble.hp).toBe(nimble.maxHp);
+    expect(clumsy.hp).toBe(clumsy.maxHp);
+
+    stepSimulation(state, 0.05);
+    expect(nimble.evade).toBeDefined();
+    expect(clumsy.evade).toBeUndefined();
+
+    run(state, barrage.warning + 0.2, 0.05);
+    expect(nimble.hp).toBe(nimble.maxHp);
+    expect(clumsy.hp).toBeLessThan(clumsy.maxHp);
+  });
+
+  it("cancels the lance if the warship is destroyed during the warning", () => {
+    const state = createExecutionState(3);
+    const warship = setUpLance(state);
+    const fighter = addFighter(state, "target", 0, warship.x - 140, warship.y);
+    fighter.speed = 0;
+
+    stepSimulation(state, 0.05);
+    expect(state.simulation.barrages).toHaveLength(1);
+    warship.hp = 0;
+    run(state, 3, 0.05);
+
+    expect(state.simulation.barrages).toHaveLength(0);
+    expect(fighter.hp).toBe(fighter.maxHp);
+  });
+
+  it("launches fighters on a short booster burn", () => {
+    const state = createExecutionState(1);
+    state.ship.upgrades.hangar_tech = 1;
+    const fighter = createFighter(state, slot(state, "slot_0_0"), getPortLoadout(state, slot(state, "slot_0_0")));
+    expect(fighter.launchBoost).toBeGreaterThan(0);
+    expect(fighter.dodge).toBeGreaterThan(0);
+  });
+});
+
+describe("booster module", () => {
+  it("gives bots 33% dodge per merged booster", () => {
+    const dodgeFor = (modules: Parameters<typeof findRecipeByModules>[0]) =>
+      getBotDodge({ recipeId: findRecipeByModules(modules)!.id } as BotInstance);
+
+    expect(dodgeFor(["solar_collector", "pulse_cannon"])).toBe(0);
+    expect(dodgeFor(["booster", "pulse_cannon"])).toBeCloseTo(0.33);
+    expect(dodgeFor(["booster", "booster", "pulse_cannon"])).toBeCloseTo(0.66);
+  });
+
+  it("pulses small enemies away from the ship but cannot shove capital ships", () => {
+    const state = createExecutionState(3);
+    state.simulation.threatCursor = state.simulation.upcomingThreats.length;
+    slot(state, "slot_1_1").moduleId = "booster";
+    const scavenger = createLaneEnemy("scavenger", 3, SHIP_CENTER.x + 120, SHIP_CENTER.y);
+    scavenger.attack = 0;
+    scavenger.speed = 0;
+    const warship = spawnWarship(3);
+    warship.x = SHIP_CENTER.x + 150;
+    warship.holdX = warship.x;
+    warship.weapons = [];
+    state.simulation.enemies.push(scavenger, warship);
+
+    run(state, 4.4, 0.05);
+
+    expect(scavenger.x).toBeGreaterThan(SHIP_CENTER.x + 160);
+    expect(warship.x).toBe(SHIP_CENTER.x + 150);
   });
 });
