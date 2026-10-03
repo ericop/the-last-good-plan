@@ -1271,11 +1271,6 @@ kbd,
   gap: 6px;
 }
 
-.route-picker {
-  display: grid;
-  gap: 6px;
-}
-
 .route-heading {
   display: flex;
   align-items: center;
@@ -1320,68 +1315,144 @@ kbd,
   color: #f7b098;
 }
 
-.route-cards {
+.sector-map {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(180px, 1fr);
-  gap: 8px;
-  overflow-x: auto;
+  gap: 4px;
 }
 
-.route-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 8px 12px;
+.route-name {
+  font-size: 16px;
+  color: #f2e7c5;
+}
+
+.sector-scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
   border-radius: 14px;
-  border: 1px solid rgba(134, 193, 214, 0.24);
-  background: linear-gradient(180deg, rgba(25, 48, 62, 0.96), rgba(14, 29, 39, 0.96));
-  color: var(--text-main);
-  text-align: left;
+  background: linear-gradient(180deg, rgba(5, 12, 18, 0.9), rgba(10, 22, 30, 0.9));
+  border: 1px solid rgba(120, 177, 198, 0.18);
+}
+
+.sector-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 128px;
+}
+
+.map-edge {
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 2;
+}
+
+.map-edge.open {
+  stroke: rgba(246, 207, 98, 0.55);
+  stroke-dasharray: 5 5;
+}
+
+.map-edge.planned {
+  stroke: var(--loot);
+  stroke-width: 3;
+  stroke-dasharray: 6 4;
+}
+
+.map-edge.taken {
+  stroke: var(--loot);
+  stroke-width: 3;
+}
+
+.map-node {
+  color: var(--route-color, #9fb4c0);
+  --route-color: #9fb4c0;
+}
+
+.map-node.route-swarm {
+  --route-color: #f7b098;
+}
+
+.map-node.route-duel {
+  --route-color: #ff6b6b;
+}
+
+.map-node.route-nebula {
+  --route-color: #b58cff;
+}
+
+.map-node.route-derelict {
+  --route-color: #9fd3c7;
+}
+
+.map-node.route-boss {
+  --route-color: #ff4d6d;
+}
+
+.map-hit {
+  fill: transparent;
+}
+
+.map-disc {
+  fill: #0b1720;
+  stroke: var(--route-color);
+  stroke-width: 2;
+}
+
+.map-node.route-boss .map-disc {
+  stroke: var(--loot);
+  stroke-width: 3;
+  fill: #2a0f16;
+}
+
+.map-node.visited .map-disc {
+  fill: color-mix(in srgb, var(--route-color) 35%, #0b1720);
+}
+
+.map-node.current .map-disc {
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+.map-node.skipped {
+  opacity: 0.2;
+}
+
+.map-node:not(.visited):not(.reachable):not(.skipped):not(.route-boss) {
+  opacity: 0.45;
+}
+
+.map-node[data-action] {
   cursor: pointer;
 }
 
-.route-card.selected {
-  border-color: var(--loot);
-  box-shadow: 0 0 0 2px rgba(246, 207, 98, 0.25), 0 0 22px rgba(246, 207, 98, 0.18);
+.map-node.reachable .map-disc {
+  animation: node-pulse 1.4s ease-in-out infinite;
 }
 
-.route-card:disabled {
-  opacity: 1;
-  cursor: default;
+.map-node[data-action]:hover .map-disc {
+  fill: color-mix(in srgb, var(--route-color) 30%, #0b1720);
 }
 
-.route-silhouette {
-  width: 48px;
-  height: 32px;
-  flex: 0 0 auto;
-  color: var(--text-soft);
+.map-node.selected .map-disc {
+  stroke: var(--loot);
+  stroke-width: 4;
+  animation: none;
+  filter: drop-shadow(0 0 6px rgba(246, 207, 98, 0.8));
 }
 
-.route-card.selected .route-silhouette {
-  color: var(--loot);
+@keyframes node-pulse {
+  50% {
+    stroke-width: 4;
+  }
 }
 
-.route-duel .route-silhouette,
-.route-boss .route-silhouette {
-  color: var(--hostile);
+.map-label {
+  fill: var(--text-dim);
+  font: 700 11px system-ui, sans-serif;
+  text-anchor: middle;
 }
 
-.route-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.route-copy strong {
-  font-size: 15px;
-}
-
-.route-copy small {
-  font-size: 12px;
-  color: var(--text-dim);
-  line-height: 1.25;
+.map-label.now {
+  fill: var(--loot);
 }
 
 .canvas-shell {
@@ -2348,7 +2419,11 @@ kbd,
 }
 
 #app[data-layout="pocket"] .route-heading {
-  display: none;
+  gap: 6px;
+}
+
+#app[data-layout="pocket"] .route-name {
+  font-size: 14px;
 }
 
 #app[data-layout="pocket"] .mission-bar {
@@ -2526,27 +2601,13 @@ kbd,
   font-size: 12px;
 }
 
-#app[data-layout="pocket"] .route-tip,
-#app[data-layout="pocket"] .route-copy small {
+#app[data-layout="pocket"] .route-intel {
   display: none;
 }
 
-#app[data-layout="pocket"] .route-cards {
-  grid-auto-columns: minmax(140px, 1fr);
-}
-
-#app[data-layout="pocket"] .route-card {
-  min-height: 48px;
-  padding: 6px 8px;
-}
-
-#app[data-layout="pocket"] .route-copy strong {
-  font-size: 13px;
-}
-
-#app[data-layout="pocket"] .route-silhouette {
-  width: 34px;
-  height: 24px;
+#app[data-layout="pocket"] .sector-svg {
+  width: 600px;
+  height: auto;
 }
 
 #app[data-layout="pocket"] .build-tray {
