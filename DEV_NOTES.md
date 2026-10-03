@@ -19,6 +19,12 @@ The key future-proofing choice is that UI and scene input never mutate gameplay 
 - Warships and bosses are "capital ships": any enemy with `holdX`. `tickCapitalShip` parks them, charges their weapons,
   regenerates shields, launches escorts, and runs point defense. Their volleys become `simulation.projectiles`.
 - Destroying a duel's warship ends the mission 4 seconds later. If the timer runs out first, it disengages.
+- A `beam` weapon does not fire a projectile. It locks a `simulation.barrages` entry with a warning timer. While the
+  warning runs, each bot or fighter that enters the corridor rolls its dodge once; a success gives it an `evade` order
+  that boosts it sideways out of the line. Bot dodge comes only from merged Booster modules (`getBotDodge`); fighter
+  dodge comes from Hangar Tech. If the source ship dies during the warning, the barrage is cancelled.
+- Ship-mounted Boosters knock back non-capital enemies near the hull every few seconds via `enemy.knockback`.
+- `src/game/effects/boosterTrails.ts` draws booster streaks for anything evading, launching, arriving, or knocked back.
 - To add a warship, append to `src/data/warships.ts`. The duel rotation cycles through that list.
 
 ## Carrier Launch Ports

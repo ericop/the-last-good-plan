@@ -33,6 +33,11 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
   - Ship Duel (every 3rd mission): an FTL-style warship parks across the field and trades charged laser and missile volleys with your ship
   - Boss (every 10th mission): a boss capital ship with its own weapons, shields, and special behaviors
 - Pulse Cannons fire visible bolts; enemy lasers hit shields first and missiles punch through half of them
+- Telegraphed lance barrages: warships and bosses lock a big beam onto your densest group of units, show a red
+  warning line for about two seconds, then fire. Units with dodge may notice and boost out of the line
+- Booster module: each Booster merged into a bot gives 33% dodge (66% with two). Placed on the ship, it pulses
+  nearby small enemies back down their lanes
+- Booster trails and the charge-shot warning are ported from [Rainbow-Survivors](https://github.com/ericop/Rainbow-Survivors)
 - Carrier play: research Hangar Tech to build Launch Ports that launch a fighter wing on their own during battle
   - Ports next to a Mineral Drill build mining skiffs, next to a Repair Node build tenders, otherwise interceptors
   - Adjacent Pulse Cannons, Shield Emitters, and Solar Collectors boost wing firepower, hull, and launch speed
