@@ -28,9 +28,27 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
 - 3x3 ship board with adjacency-aware merges
 - Six base modules and ten merge outcomes
 - Discovery log with unknown, discovered, and known/mastered-lite states
-- Predictable wave schedule with a mini-boss
+- Three encounter types that rotate by mission:
+  - Swarm Defense: tower-defense style streams of darts, scavengers, and brutes marching down three lanes, ending in a mini-boss
+  - Ship Duel (every 3rd mission): an FTL-style warship parks across the field and trades charged laser and missile volleys with your ship
+  - Boss (every 10th mission): a boss capital ship with its own weapons, shields, and special behaviors
+- Pulse Cannons fire visible bolts; enemy lasers hit shields first and missiles punch through half of them
+- Telegraphed lance barrages: warships and bosses lock a big beam onto your densest group of units, show a red
+  warning line for about two seconds, then fire. Units with dodge may notice and boost out of the line
+- Booster module: each Booster merged into a bot gives 33% dodge (66% with two). Placed on the ship, it pulses
+  nearby small enemies back down their lanes
+- Booster trails and the charge-shot warning are ported from [Rainbow-Survivors](https://github.com/ericop/Rainbow-Survivors)
+- Sector map: pick your next jump between Swarm, Ship Duel, Nebula Run (no shields, double scrap) and Derelict
+  Salvage (lighter fight, free supplies). Every 10th jump is a boss
+- Two native layouts over one game: a portrait phone layout with the battlefield turned so enemies come down toward
+  your ship, and a desktop "arena" layout with hotkeys, fleet frames, a wave timeline and a killfeed
+- Mission debrief with 1 to 3 stars, count-up rewards, an MVP bot, and every chest collected during the fight
+- Sound and haptics (mute from the top-right corner)
+- Carrier play: research Hangar Tech to build Launch Ports that launch a fighter wing on their own during battle
+  - Ports next to a Mineral Drill build mining skiffs, next to a Repair Node build tenders, otherwise interceptors
+  - Adjacent Pulse Cannons, Shield Emitters, and Solar Collectors boost wing firepower, hull, and launch speed
 - Moon objective that reveals artifact rewards when fully mined
-- Three upgrade nodes
+- Four upgrade nodes, including Hangar Tech
 - LocalStorage persistence for discovery and meta knowledge
 - Instant pause with `Space` or the pause button
 

@@ -3,14 +3,23 @@ import { createEmptyEpicInventory } from "../data/epicModuleRegistry";
 import type {
   BotInstance,
   DiscoveryLog,
+  RouteId,
   RunState,
   SaveData,
   ShipSlot,
   SimulationState,
 } from "../types/gameTypes";
 import { createTutorialState } from "./tutorial";
-import { createCycleThreatSchedule, getCycleDuration } from "./bossManager";
-import { createEmptyPool, getBotStagingPosition } from "./utils";
+import {
+  createCycleThreatSchedule,
+  DERELICT_SUPPLIES,
+  getCycleDuration,
+  getDefaultRoute,
+  getEncounterName,
+  getRouteOptions,
+  ROUTES,
+} from "./encounters";
+import { addMessage, addToPool, createEmptyPool, getBotStagingPosition } from "./utils";
 
 interface CreateRunStateOptions {
   forceTutorial?: boolean;
@@ -40,13 +49,40 @@ function createSlots(): ShipSlot[] {
   return slots;
 }
 
-function createSimulationState(cycle: number): SimulationState {
+const LAUNCH_COUNTDOWN = 1.6;
+
+export function isFirstMission(state: Pick<RunState, "cycle" | "meta">): boolean {
+  return state.cycle === 1 && state.meta.totalCyclesCompleted === 0;
+}
+
+export function createSimulationState(cycle: number, route: RouteId, firstMission: boolean): SimulationState {
   return {
     elapsed: 0,
-    duration: getCycleDuration(cycle),
-    upcomingThreats: createCycleThreatSchedule(cycle),
+    duration: getCycleDuration(cycle, route),
+    route,
+    encounter: ROUTES[route].encounter,
+    encounterName: getEncounterName(cycle, route),
+    lanes: firstMission ? [1] : [0, 1, 2],
+    launchCountdown: 0,
+    shieldsOffline: route === "nebula",
+    scrapMultiplier: route === "nebula" ? 2 : 1,
+    chests: [],
+    callouts: [],
+    killfeed: [],
+    announcement: undefined,
+    dodgesByUnit: {},
+    fallenBots: [],
+    startingHull: 0,
+    upcomingThreats: createCycleThreatSchedule(cycle, route),
     threatCursor: 0,
+    pendingSpawns: [],
     enemies: [],
+    projectiles: [],
+    barrages: [],
+    fighters: [],
+    impacts: [],
+    moduleTimers: {},
+    warshipDefeated: false,
     objective: {
       integrity: 90 + cycle * 18,
       maxIntegrity: 90 + cycle * 18,
@@ -88,6 +124,7 @@ export function createRunState(
   options: CreateRunStateOptions = {},
 ): RunState {
   const discovery: DiscoveryLog = JSON.parse(JSON.stringify(saveData.discovery));
+  const firstMission = isFirstMission({ cycle: 1, meta: saveData.meta });
   return {
     phase,
     cycle: 1,
@@ -112,12 +149,14 @@ export function createRunState(
         mining_array: 0,
         defense_grid: 0,
         support_bay: 0,
+        hangar_tech: 0,
       },
       artifacts: [],
       epicInventory: createEmptyEpicInventory(),
       botCapacityBase: 4,
     },
-    simulation: createSimulationState(1),
+    simulation: createSimulationState(1, getDefaultRoute(1), firstMission),
+    routeOptions: getRouteOptions(1, firstMission),
     summary: undefined,
     pendingReward: undefined,
     ui: {
@@ -159,11 +198,21 @@ export function resetForNextCycle(state: RunState): void {
     bot.contribution = { mined: 0, damage: 0, healing: 0, salvage: 0 };
   });
   state.missionPrep.modulesPlacedThisMission = 0;
-  state.simulation = createSimulationState(state.cycle);
+  state.routeOptions = getRouteOptions(state.cycle, false);
+  state.simulation = createSimulationState(state.cycle, state.routeOptions[0], false);
+}
+
+export function selectRoute(state: RunState, route: RouteId): void {
+  const discoveries = [...state.simulation.cycleStats.discoveries];
+  const messages = [...state.simulation.messageLog];
+  state.simulation = createSimulationState(state.cycle, route, isFirstMission(state));
+  state.simulation.cycleStats.discoveries = discoveries;
+  state.simulation.messageLog = messages;
 }
 
 export function prepareExecutionState(state: RunState): void {
   const preMissionDiscoveries = [...state.simulation.cycleStats.discoveries];
+  const route = state.simulation.route;
 
   state.phase = "execution";
   state.paused = false;
@@ -174,7 +223,7 @@ export function prepareExecutionState(state: RunState): void {
   state.doctrineChangesThisCycle = 0;
   state.ui.selectedSlotIds = [];
   state.ui.selectedFabricationModuleId = undefined;
-  state.ui.activeDockPanel = "ship";
+  state.ui.activeDockPanel = "bots";
   state.ship.shield = state.ship.maxShield;
   state.ship.bots = state.ship.bots.filter((bot) => bot.hp > 0);
   state.ship.bots.forEach((bot, index) => {
@@ -185,9 +234,19 @@ export function prepareExecutionState(state: RunState): void {
     bot.cooldown = 0;
     bot.contribution = { mined: 0, damage: 0, healing: 0, salvage: 0 };
   });
-  state.simulation = createSimulationState(state.cycle);
+  state.simulation = createSimulationState(state.cycle, route, isFirstMission(state));
   state.simulation.cycleStats.discoveries = preMissionDiscoveries;
+  state.simulation.launchCountdown = LAUNCH_COUNTDOWN;
   state.simulation.messageLog = [
-    `Mission ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
+    `${state.simulation.encounterName} started. Bots are running at 150% efficiency while commitment holds.`,
   ];
+  if (state.simulation.shieldsOffline) {
+    state.ship.shield = 0;
+  }
+  if (route === "derelict") {
+    addToPool(state.resources, DERELICT_SUPPLIES);
+    addToPool(state.simulation.cycleStats.gained, DERELICT_SUPPLIES);
+    addMessage(state, `Derelict supplies recovered: +${DERELICT_SUPPLIES.solar} solar, +${DERELICT_SUPPLIES.minerals} minerals.`);
+  }
+  state.simulation.startingHull = state.ship.hull;
 }

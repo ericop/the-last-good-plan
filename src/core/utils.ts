@@ -8,6 +8,8 @@ import type {
   RewardSource,
   RunState,
   ShipSlot,
+  ShipWeaponDefinition,
+  ShipWeaponState,
 } from "../types/gameTypes";
 import { ARTIFACT_DEFINITIONS } from "../data/artifacts";
 import { MERGE_RECIPES } from "../data/merges";
@@ -68,6 +70,33 @@ export function moveToward(
 
 export function makeBotId(): string {
   return `bot_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function createWeaponStates(weapons: ShipWeaponDefinition[], damageScale: number): ShipWeaponState[] {
+  return weapons.map((weapon) => ({
+    ...weapon,
+    damage: Math.round(weapon.damage * damageScale * 10) / 10,
+    charge: weapon.chargeTime * 0.5,
+  }));
+}
+
+export function closestPointOnSegment(
+  point: { x: number; y: number },
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): { x: number; y: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared > 0 ? clamp(((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared, 0, 1) : 0;
+  return { x: from.x + dx * t, y: from.y + dy * t };
+}
+
+export const DODGE_PER_BOOSTER = 0.33;
+
+export function getBotDodge(bot: BotInstance): number {
+  const boosters = getRecipeById(bot.recipeId)?.modules.filter((moduleId) => moduleId === "booster").length ?? 0;
+  return boosters * DODGE_PER_BOOSTER;
 }
 
 export function makeEnemyId(): string {

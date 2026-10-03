@@ -12,6 +12,50 @@ The MVP separates simulation from presentation.
 
 The key future-proofing choice is that UI and scene input never mutate gameplay state directly. They always dispatch commands.
 
+## Encounters
+
+- `src/core/encounters.ts` maps each cycle to an encounter (`swarm`, `duel`, or `boss`), builds its threat schedule, and
+  sets its duration. Swarm waves trickle into `simulation.pendingSpawns` and then walk `LANE_YS` toward the ship.
+- Warships and bosses are "capital ships": any enemy with `holdX`. `tickCapitalShip` parks them, charges their weapons,
+  regenerates shields, launches escorts, and runs point defense. Their volleys become `simulation.projectiles`.
+- Destroying a duel's warship ends the mission 4 seconds later. If the timer runs out first, it disengages.
+- A `beam` weapon does not fire a projectile. It locks a `simulation.barrages` entry with a warning timer. While the
+  warning runs, each bot or fighter that enters the corridor rolls its dodge once; a success gives it an `evade` order
+  that boosts it sideways out of the line. Bot dodge comes only from merged Booster modules (`getBotDodge`); fighter
+  dodge comes from Hangar Tech. If the source ship dies during the warning, the barrage is cancelled.
+- Ship-mounted Boosters knock back non-capital enemies near the hull every few seconds via `enemy.knockback`.
+- `src/game/effects/boosterTrails.ts` draws booster streaks for anything evading, launching, arriving, or knocked back.
+- To add a warship, append to `src/data/warships.ts`. The duel rotation cycles through that list.
+
+## Layouts
+
+- `src/ui/layoutMode.ts` picks `pocket` (portrait under 700px wide), `compact`, or `arena` (1180px and up). `UIManager`
+  writes it to `#app[data-layout]` for CSS, and `RunScene` reads it to decide whether to rotate the battlefield.
+- Pocket rotates one Phaser container by -90° and swaps the game size to 640×960; the sim never sees the rotation.
+  Anything added to the scene must go into `this.world`, and new texts need `setRotation(-this.world.rotation)`.
+- All HUD text lives in the DOM (`UIManager`), never in the canvas, so it stays readable at phone scale.
+
+## Sector Map, Chests, and Debrief
+
+- `state.routeOptions` is rolled in `resetForNextCycle` from `getRouteOptions`; `choose_route` rebuilds the planning
+  simulation for that route via `selectRoute`. Route rules (encounter, blurb, tip) live in `ROUTES` in `encounters.ts`.
+- Rewards found mid-mission are pushed to `simulation.chests` instead of pausing. `open_chest` moves one into
+  `pendingReward` during the debrief, and `continue_from_results` refuses to advance until the queue is empty.
+- `finalizeCycle` scores `summary.stars` and `summary.mvp` (fallen bots are eligible).
+
+## Tests
+
+- `npm run test` runs everything. `src/core/missionFlow.test.ts` plays whole missions on every route headlessly and is
+  the first place to look when a sim change breaks something. `src/ui/uiManager.test.ts` renders the real DOM UI under
+  happy-dom through every phase and both layouts.
+
+## Carrier Launch Ports
+
+- `launch_port` is a module, but it is excluded from merges via `MergeableModuleId`.
+- Building one requires `hangar_tech` level 1. `src/core/hangar.ts` derives each port's wing (kind, size, launch
+  interval, stats) from the Hangar Tech level and the port's adjacent modules.
+- Fighters live in `simulation.fighters`, are rebuilt every mission, and never count against bot capacity.
+
 ## Adding Modules
 
 1. Add the new module definition to `src/data/modules.ts`.

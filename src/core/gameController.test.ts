@@ -121,7 +121,8 @@ describe("game controller updates", () => {
 
     expect(state.simulation.bossDefeated).toBe(true);
     expect(state.simulation.duration).toBe(startingDuration + 10);
-    expect(state.pendingReward).toBeDefined();
+    expect(state.simulation.chests).toHaveLength(1);
+    expect(state.paused).toBe(false);
   });
 
   it("does not add extra time after the mini-boss if the moon is already mined out", () => {
@@ -163,7 +164,26 @@ describe("game controller updates", () => {
 
     expect(state.simulation.bossDefeated).toBe(true);
     expect(state.simulation.duration).toBe(startingDuration);
-    expect(state.pendingReward).toBeDefined();
+    expect(state.simulation.chests.map((chest) => chest.source).sort()).toEqual(["boss_chest", "moon"]);
+    expect(state.paused).toBe(false);
+  });
+
+  it("starts a fresh run after losing a replayed tutorial mission", () => {
+    Object.defineProperty(globalThis, "localStorage", {
+      value: { setItem: () => undefined },
+      configurable: true,
+    });
+    const controller = new GameController(createSaveData(true));
+    controller.dispatch({ type: "replay_tutorial" });
+    const state = controller.getState();
+    expect(state.tutorial.active).toBe(true);
+    state.phase = "run_over";
+    state.tutorial.stepId = "mission_results";
+
+    controller.dispatch({ type: "start_new_run" });
+
+    expect(controller.getState().phase).toBe("planning");
+    expect(controller.getState().ship.hull).toBe(controller.getState().ship.maxHull);
   });
 
   it("runs missions at double speed when fast forward is enabled", () => {
@@ -178,6 +198,7 @@ describe("game controller updates", () => {
     state.ship.bots.push(createBotStub());
 
     controller.dispatch({ type: "begin_execution" });
+    controller.getState().simulation.launchCountdown = 0;
     controller.dispatch({ type: "toggle_execution_speed" });
     controller.update(1);
 

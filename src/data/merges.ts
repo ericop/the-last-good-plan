@@ -1,5 +1,5 @@
 import { MODULE_DEFINITIONS } from "./modules";
-import type { MergeModules, MergeRecipe, ModuleId } from "../types/gameTypes";
+import type { MergeModules, MergeRecipe, MergeableModuleId } from "../types/gameTypes";
 
 interface ModuleTrait {
   label: string;
@@ -14,16 +14,17 @@ interface ModuleTrait {
   defense: number;
 }
 
-const MODULE_ORDER: ModuleId[] = [
+const MODULE_ORDER: MergeableModuleId[] = [
   "solar_collector",
   "mineral_drill",
   "shield_emitter",
   "pulse_cannon",
   "cargo_core",
   "repair_node",
+  "booster",
 ];
 
-const MODULE_TRAITS: Record<ModuleId, ModuleTrait> = {
+const MODULE_TRAITS: Record<MergeableModuleId, ModuleTrait> = {
   solar_collector: {
     label: "Solar",
     tags: ["solar", "power"],
@@ -95,6 +96,18 @@ const MODULE_TRAITS: Record<ModuleId, ModuleTrait> = {
     range: 18,
     salvage: 0.5,
     defense: 1.5,
+  },
+  booster: {
+    label: "Booster",
+    tags: ["booster", "mobility"],
+    hp: 4,
+    speed: 14,
+    mining: 0.4,
+    attack: 0.8,
+    support: 0.4,
+    range: 4,
+    salvage: 0.2,
+    defense: 0.6,
   },
 };
 
@@ -249,11 +262,11 @@ const ROLE_MASTERY = {
   hybrid: "Mastered crews use it when one clean chassis needs to cover multiple jobs at once.",
 } as const;
 
-function sortModules(modules: readonly ModuleId[]): ModuleId[] {
+function sortModules(modules: readonly MergeableModuleId[]): MergeableModuleId[] {
   return [...modules].sort((left, right) => MODULE_ORDER.indexOf(left) - MODULE_ORDER.indexOf(right));
 }
 
-function toMergeModules(modules: readonly ModuleId[]): MergeModules {
+function toMergeModules(modules: readonly MergeableModuleId[]): MergeModules {
   const sorted = sortModules(modules);
   if (sorted.length === 2) {
     return [sorted[0], sorted[1]];
@@ -261,11 +274,11 @@ function toMergeModules(modules: readonly ModuleId[]): MergeModules {
   return [sorted[0], sorted[1], sorted[2]];
 }
 
-function getMergeKey(modules: readonly ModuleId[]): string {
+function getMergeKey(modules: readonly MergeableModuleId[]): string {
   return sortModules(modules).join("|");
 }
 
-function blendColors(modules: readonly ModuleId[]): number {
+function blendColors(modules: readonly MergeableModuleId[]): number {
   const totals = modules.reduce(
     (accumulator, moduleId) => {
       const color = MODULE_DEFINITIONS[moduleId].color;
@@ -287,7 +300,7 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function countModules(modules: readonly ModuleId[]): Record<ModuleId, number> {
+function countModules(modules: readonly MergeableModuleId[]): Record<MergeableModuleId, number> {
   return modules.reduce(
     (counts, moduleId) => {
       counts[moduleId] += 1;
@@ -300,14 +313,15 @@ function countModules(modules: readonly ModuleId[]): Record<ModuleId, number> {
       pulse_cannon: 0,
       cargo_core: 0,
       repair_node: 0,
-    } satisfies Record<ModuleId, number>,
+      booster: 0,
+    } satisfies Record<MergeableModuleId, number>,
   );
 }
 
-function buildAxisTotals(modules: readonly ModuleId[]) {
+function buildAxisTotals(modules: readonly MergeableModuleId[]) {
   const counts = countModules(modules);
   const distinctCount = new Set(modules).size;
-  const has = (moduleId: ModuleId) => counts[moduleId] > 0;
+  const has = (moduleId: MergeableModuleId) => counts[moduleId] > 0;
   const totals = modules.reduce(
     (accumulator, moduleId) => {
       const trait = MODULE_TRAITS[moduleId];
@@ -425,7 +439,7 @@ function buildAxisTotals(modules: readonly ModuleId[]) {
   return { counts, distinctCount, totals };
 }
 
-function determineRole(modules: readonly ModuleId[]): MergeRecipe["role"] {
+function determineRole(modules: readonly MergeableModuleId[]): MergeRecipe["role"] {
   const { distinctCount, totals } = buildAxisTotals(modules);
   const scores = [
     { id: "mining" as const, value: totals.mining + totals.salvage * 0.25 },
@@ -446,7 +460,7 @@ function determineRole(modules: readonly ModuleId[]): MergeRecipe["role"] {
   return "defense";
 }
 
-function buildStats(modules: readonly ModuleId[], role: MergeRecipe["role"]): MergeRecipe["stats"] {
+function buildStats(modules: readonly MergeableModuleId[], role: MergeRecipe["role"]): MergeRecipe["stats"] {
   const { totals } = buildAxisTotals(modules);
   const stats = {
     hp: Math.round(26 + totals.hp + totals.defense * 6),
@@ -479,7 +493,7 @@ function buildStats(modules: readonly ModuleId[], role: MergeRecipe["role"]): Me
   return stats;
 }
 
-function describeAxes(modules: readonly ModuleId[]): string {
+function describeAxes(modules: readonly MergeableModuleId[]): string {
   const { totals } = buildAxisTotals(modules);
   const axes = [
     { label: "mining", value: totals.mining + totals.salvage * 0.2 },
@@ -492,10 +506,10 @@ function describeAxes(modules: readonly ModuleId[]): string {
   return axes[0].label;
 }
 
-function getBehaviorNotes(modules: readonly ModuleId[]): string[] {
+function getBehaviorNotes(modules: readonly MergeableModuleId[]): string[] {
   const { counts } = buildAxisTotals(modules);
   const notes: string[] = [];
-  const has = (moduleId: ModuleId) => counts[moduleId] > 0;
+  const has = (moduleId: MergeableModuleId) => counts[moduleId] > 0;
 
   if (counts.solar_collector === 2) notes.push("Double solar hardware keeps it unusually quick and efficient.");
   if (counts.mineral_drill === 2) notes.push("Paired drills let it bite deeper into the moon objective.");
@@ -503,6 +517,8 @@ function getBehaviorNotes(modules: readonly ModuleId[]): string[] {
   if (counts.pulse_cannon === 2) notes.push("Twin pulse emitters give it sharp threat pressure.");
   if (counts.cargo_core === 2) notes.push("Extra cargo framing turns more debris into scrap.");
   if (counts.repair_node === 2) notes.push("Twin repair nodes let it stabilize attrition over time.");
+  if (counts.booster === 2) notes.push("Twin boosters let it slip out of two of every three lance shots.");
+  else if (has("booster")) notes.push("Its booster gives it a one-in-three chance to dodge lance fire.");
 
   if (has("solar_collector") && has("mineral_drill")) notes.push("It reaches the moon quickly and turns time into minerals.");
   if (has("solar_collector") && has("shield_emitter")) notes.push("Its solar-fed shielding helps it stay calm under pressure.");
@@ -518,7 +534,7 @@ function getBehaviorNotes(modules: readonly ModuleId[]): string[] {
   return [...new Set(notes)];
 }
 
-function listModuleNames(modules: readonly ModuleId[]): string {
+function listModuleNames(modules: readonly MergeableModuleId[]): string {
   const names = modules.map((moduleId) => MODULE_DEFINITIONS[moduleId].name);
   if (names.length === 2) {
     return `${names[0]} and ${names[1]}`;
@@ -526,7 +542,7 @@ function listModuleNames(modules: readonly ModuleId[]): string {
   return `${names[0]}, ${names[1]}, and ${names[2]}`;
 }
 
-function buildName(modules: readonly ModuleId[], role: MergeRecipe["role"]): string {
+function buildName(modules: readonly MergeableModuleId[], role: MergeRecipe["role"]): string {
   const { counts, distinctCount } = buildAxisTotals(modules);
   const sorted = sortModules(modules);
   const labels = sorted.map((moduleId) => MODULE_TRAITS[moduleId].label);
@@ -535,7 +551,7 @@ function buildName(modules: readonly ModuleId[], role: MergeRecipe["role"]): str
     return `${labels[0]}-${labels[1]} ${ROLE_NAME_PARTS[role].pair}`;
   }
 
-  const repeated = Object.entries(counts).find(([, count]) => count === 2)?.[0] as ModuleId | undefined;
+  const repeated = Object.entries(counts).find(([, count]) => count === 2)?.[0] as MergeableModuleId | undefined;
   if (repeated) {
     const other = sorted.find((moduleId) => moduleId !== repeated)!;
     return `Twin ${MODULE_TRAITS[repeated].label} ${MODULE_TRAITS[other].label} ${ROLE_NAME_PARTS[role].repeated}`;
@@ -548,17 +564,17 @@ function buildName(modules: readonly ModuleId[], role: MergeRecipe["role"]): str
   return `${labels.join("-")} ${ROLE_NAME_PARTS[role].trio}`;
 }
 
-function buildHint(modules: readonly ModuleId[], role: MergeRecipe["role"]): string {
+function buildHint(modules: readonly MergeableModuleId[], role: MergeRecipe["role"]): string {
   return `Pattern leans ${describeAxes(modules)}. Expect ${ROLE_HINTS[role]} built from ${listModuleNames(modules)}.`;
 }
 
-function buildSummary(modules: readonly ModuleId[], role: MergeRecipe["role"]): string {
+function buildSummary(modules: readonly MergeableModuleId[], role: MergeRecipe["role"]): string {
   const notes = getBehaviorNotes(modules).slice(0, 2).join(" ");
   return `${ROLE_SUMMARIES[role]} Built from ${listModuleNames(modules)}.${notes ? ` ${notes}` : ""}`;
 }
 
-function buildMasteryNote(modules: readonly ModuleId[], role: MergeRecipe["role"]): string {
-  const repeatedModule = Object.entries(countModules(modules)).find(([, count]) => count === 2)?.[0] as ModuleId | undefined;
+function buildMasteryNote(modules: readonly MergeableModuleId[], role: MergeRecipe["role"]): string {
+  const repeatedModule = Object.entries(countModules(modules)).find(([, count]) => count === 2)?.[0] as MergeableModuleId | undefined;
   if (repeatedModule) {
     return `${ROLE_MASTERY[role]} Repeating ${MODULE_DEFINITIONS[repeatedModule].name} gives this chassis a very committed lane.`;
   }
@@ -568,7 +584,7 @@ function buildMasteryNote(modules: readonly ModuleId[], role: MergeRecipe["role"
   return ROLE_MASTERY[role];
 }
 
-function buildTags(modules: readonly ModuleId[], role: MergeRecipe["role"]): string[] {
+function buildTags(modules: readonly MergeableModuleId[], role: MergeRecipe["role"]): string[] {
   return [
     ...new Set(modules.flatMap((moduleId) => MODULE_TRAITS[moduleId].tags).concat(role, modules.length === 3 ? "triple" : "pair")),
   ];

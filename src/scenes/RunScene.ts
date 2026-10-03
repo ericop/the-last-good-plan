@@ -2,8 +2,8 @@ import Phaser from "phaser";
 import { getEpicModuleById, getSlotModulePresentation } from "../data/epicModuleRegistry";
 import { getMergePreviewFromModules } from "../core/discovery";
 import type { GameController } from "../core/gameController";
-import { getPhaseLabel } from "../core/tutorial";
-import { GAME_HEIGHT, GAME_WIDTH, SHIP_CENTER, SLOT_SIZE } from "../game/constants";
+import { getTutorialHandTarget } from "../core/tutorial";
+import { BOARD_ORIGIN, GAME_HEIGHT, GAME_WIDTH, LANE_YS, SHIP_CENTER, SLOT_GAP, SLOT_SIZE } from "../game/constants";
 import {
   AssemblyEffectsManager,
   drawMechanicalModulePlate,
@@ -12,7 +12,47 @@ import {
   type SlotView,
 } from "../game/effects/assemblyEffects";
 import { createStarfield, drawAmbientPanel, drawMechanicalHalo, type StarfieldHandle } from "../game/effects/ambientVisuals";
-import type { BotInstance, EpicModuleId, ModuleId, RunState, ShipSlot } from "../types/gameTypes";
+import { BoosterTrails, type BoosterEmitter } from "../game/effects/boosterTrails";
+import type {
+  BarrageState,
+  BotInstance,
+  EnemyInstance,
+  EpicModuleId,
+  FighterInstance,
+  ModuleId,
+  RunState,
+  ShipSlot,
+} from "../types/gameTypes";
+import { haptic, playSound } from "../ui/feedback";
+import { getLayoutMode } from "../ui/layoutMode";
+
+const BARRAGE_RED = 0xff2850;
+const LAUNCH_FLASH_TIME = 0.45;
+const BIG_HIT_HULL = 8;
+const OBSERVER_ZOOM = 1.3;
+const PLANNING_ZOOM = 1.45;
+const BOARD_CENTER = {
+  x: BOARD_ORIGIN.x + (SLOT_SIZE * 3 + SLOT_GAP * 2) / 2,
+  y: BOARD_ORIGIN.y + (SLOT_SIZE * 3 + SLOT_GAP * 2) / 2,
+};
+
+interface LaunchFlash {
+  x: number;
+  y: number;
+  age: number;
+  color: number;
+}
+
+interface FeedbackSnapshot {
+  warningIds: Set<string>;
+  firedIds: Set<string>;
+  fighterIds: Set<string>;
+  announcement?: string;
+  calloutCount: number;
+  launching: boolean;
+  bossIntro: boolean;
+  hull: number;
+}
 
 interface VisualSnapshot {
   phase: RunState["phase"];
@@ -26,15 +66,16 @@ interface VisualSnapshot {
 export class RunScene extends Phaser.Scene {
   private controller!: GameController;
   private graphics!: Phaser.GameObjects.Graphics;
+  private boosterGraphics!: Phaser.GameObjects.Graphics;
+  private boosterTrails = new BoosterTrails();
+  private barrageAlertTexts: Phaser.GameObjects.Text[] = [];
   private slotLabelTexts = new Map<string, Phaser.GameObjects.Text>();
   private slotCodeTexts = new Map<string, Phaser.GameObjects.Text>();
-  private threatTexts: Phaser.GameObjects.Text[] = [];
-  private threatTitleText!: Phaser.GameObjects.Text;
-  private phaseText!: Phaser.GameObjects.Text;
-  private objectiveText!: Phaser.GameObjects.Text;
-  private bossLabelText!: Phaser.GameObjects.Text;
-  private hintText!: Phaser.GameObjects.Text;
-  private overlayText!: Phaser.GameObjects.Text;
+  private calloutTexts: Phaser.GameObjects.Text[] = [];
+  private world!: Phaser.GameObjects.Container;
+  private portrait = false;
+  private launchFlashes: LaunchFlash[] = [];
+  private feedbackSnapshot?: FeedbackSnapshot;
   private starfield!: StarfieldHandle;
   private assemblyEffects!: AssemblyEffectsManager;
   private visualTime = 0;
@@ -47,6 +88,7 @@ export class RunScene extends Phaser.Scene {
   create(): void {
     this.controller = this.registry.get("controller") as GameController;
     this.graphics = this.add.graphics();
+    this.boosterGraphics = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
     this.starfield = createStarfield(this, { width: GAME_WIDTH, height: GAME_HEIGHT });
     this.assemblyEffects = new AssemblyEffectsManager(this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -56,7 +98,7 @@ export class RunScene extends Phaser.Scene {
 
     const state = this.controller.getState();
     for (const slot of state.ship.slots) {
-      const zone = this.add.zone(slot.x, slot.y, SLOT_SIZE, SLOT_SIZE).setInteractive({ useHandCursor: true });
+      const zone = this.add.zone(slot.x, slot.y, SLOT_SIZE + SLOT_GAP, SLOT_SIZE + SLOT_GAP).setInteractive({ useHandCursor: true });
       zone.on("pointerdown", () => {
         this.controller.dispatch({ type: "board_slot_pressed", slotId: slot.id });
       });
@@ -84,59 +126,40 @@ export class RunScene extends Phaser.Scene {
       this.slotCodeTexts.set(slot.id, codeText);
     }
 
-    this.threatTitleText = this.add.text(728, 372, "Waves", {
-      fontFamily: "Trebuchet MS, Verdana, sans-serif",
-      fontSize: "14px",
-      color: "#d3edf6",
-    });
-
-    for (let index = 0; index < 4; index += 1) {
-      this.threatTexts.push(
-        this.add.text(728, 400 + index * 30, "", {
-          fontFamily: "Trebuchet MS, Verdana, sans-serif",
-          fontSize: "12px",
-          color: "#f7dba0",
-          wordWrap: { width: 176 },
-        }),
+    for (let index = 0; index < 8; index += 1) {
+      this.calloutTexts.push(
+        this.add
+          .text(0, 0, "", {
+            fontFamily: "system-ui, sans-serif",
+            fontSize: "22px",
+            fontStyle: "bold",
+            color: "#ffffff",
+            stroke: "#0b1720",
+            strokeThickness: 4,
+          })
+          .setOrigin(0.5)
+          .setVisible(false),
       );
     }
 
-    this.phaseText = this.add.text(24, 20, "", {
-      fontFamily: "Trebuchet MS, Verdana, sans-serif",
-      fontSize: "18px",
-      color: "#e6f3ff",
-    });
-    this.objectiveText = this.add.text(664, 68, "", {
-      fontFamily: "Trebuchet MS, Verdana, sans-serif",
-      fontSize: "16px",
-      color: "#d3edf6",
-    });
-    this.bossLabelText = this.add
-      .text(GAME_WIDTH / 2, 48, "", {
-        fontFamily: "Trebuchet MS, Verdana, sans-serif",
-        fontSize: "13px",
-        color: "#f2e3b4",
-        align: "center",
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(3)
-      .setVisible(false);    this.hintText = this.add.text(28, 594, "", {
-      fontFamily: "Trebuchet MS, Verdana, sans-serif",
-      fontSize: "14px",
-      color: "#9fc6d8",
-      wordWrap: { width: 680 },
-    });
-    this.overlayText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "", {
-        fontFamily: "Georgia, serif",
-        fontSize: "30px",
-        color: "#f7f4df",
-        align: "center",
-        wordWrap: { width: 420 },
-      })
-      .setOrigin(0.5)
-      .setDepth(10)
-      .setVisible(false);
+    for (let index = 0; index < 4; index += 1) {
+      this.barrageAlertTexts.push(
+        this.add
+          .text(0, 0, "!", { fontFamily: "system-ui, sans-serif", fontSize: "26px", fontStyle: "bold", color: "#ff2850" })
+          .setOrigin(0.5)
+          .setDepth(4)
+          .setVisible(false),
+      );
+    }
+
+    this.world = this.add.container(0, 0, [
+      this.graphics,
+      this.boosterGraphics,
+      ...this.children.list.filter(
+        (child) => child !== this.graphics && child !== this.boosterGraphics && child !== this.world,
+      ),
+    ]);
+    this.applyOrientation(getLayoutMode() === "pocket");
 
     this.input.keyboard?.on("keydown-SPACE", (event: KeyboardEvent) => {
       event.preventDefault();
@@ -153,6 +176,24 @@ export class RunScene extends Phaser.Scene {
     this.starfield.update(dt);
     this.controller.update(dt);
     const state = this.controller.getState();
+    const portrait = getLayoutMode() === "pocket";
+    if (portrait !== this.portrait) {
+      this.applyOrientation(portrait);
+    }
+    const missionLive = state.phase === "execution" && !state.paused && !state.pendingReward;
+    if (missionLive) {
+      this.launchFlashes.forEach((flash) => {
+        flash.age += dt * state.executionSpeed;
+      });
+      this.launchFlashes = this.launchFlashes.filter((flash) => flash.age < LAUNCH_FLASH_TIME);
+    }
+    this.emitBattleFeedback(state);
+    this.updateObserverCamera(state, dt);
+    if (state.phase !== "execution") {
+      this.boosterTrails.clear();
+    } else if (missionLive) {
+      this.boosterTrails.update(dt * state.executionSpeed, this.collectBoosterEmitters(state));
+    }
     this.syncAssemblyEffects(state);
     this.renderState(state);
     this.visualSnapshot = this.captureVisualSnapshot(state);
@@ -162,14 +203,23 @@ export class RunScene extends Phaser.Scene {
     this.graphics.clear();
     this.drawBackground();
     this.drawPlayfield(state);
+    this.drawLanes(state);
     this.drawSlots(state);
     this.drawObjective(state);
-    this.drawBossHud(state);
+    this.drawBeams(state);
     this.drawBots(state);
+    this.drawFighters(state);
     this.drawEnemies(state);
+    this.drawProjectiles(state);
+    this.drawBarrages(state);
+    this.drawImpacts(state);
+    this.drawLaunchFlashes();
+    this.drawTapMarker(state);
+    this.boosterGraphics.clear();
+    this.boosterTrails.draw(this.boosterGraphics);
     this.assemblyEffects.drawOverlay(this.graphics);
-    this.updateTexts(state);
-    this.drawOverlay(state);
+    this.updateSlotLabels(state);
+    this.drawCallouts(state);
   }
 
   private drawBackground(): void {
@@ -220,8 +270,7 @@ export class RunScene extends Phaser.Scene {
     this.graphics.fillStyle(0x112636, 0.92);
     this.graphics.fillCircle(SHIP_CENTER.x, SHIP_CENTER.y, 82);
 
-    drawAmbientPanel(this.graphics, 620, 112, 232, 118, 18, time + 2.1);
-    drawAmbientPanel(this.graphics, 712, 356, 208, 182, 16, time + 3.2);
+    drawAmbientPanel(this.graphics, 690, 102, 232, 128, 18, time + 2.1);
   }
 
   private drawSlots(state: RunState): void {
@@ -282,7 +331,7 @@ export class RunScene extends Phaser.Scene {
           .setColor(recommended ? "#f7e6a7" : "#9dc0d0")
           .setPosition(slot.x, slot.y)
           .setScale(1)
-          .setRotation(0)
+          .setRotation(-this.world.rotation)
           .setAlpha(1);
         continue;
       }
@@ -299,7 +348,7 @@ export class RunScene extends Phaser.Scene {
         .setColor(slot.epicModuleId ? "#13100a" : "#091016")
         .setPosition(renderState.x, renderState.y)
         .setScale(renderState.textScale)
-        .setRotation(renderState.rotation * 0.5)
+        .setRotation(renderState.rotation * 0.5 - this.world.rotation)
         .setAlpha(renderState.textAlpha);
     }
   }
@@ -307,56 +356,36 @@ export class RunScene extends Phaser.Scene {
   private drawObjective(state: RunState): void {
     const integrityRatio = state.simulation.objective.integrity / state.simulation.objective.maxIntegrity;
     this.graphics.fillStyle(0x8c8a87, 1);
-    this.graphics.fillCircle(744, 166, 36);
+    this.graphics.fillCircle(806, 160, 36);
     this.graphics.fillStyle(0x6d655a, 1);
-    this.graphics.fillCircle(758, 154, 11);
-    this.graphics.fillCircle(726, 178, 9);
+    this.graphics.fillCircle(820, 148, 11);
+    this.graphics.fillCircle(788, 172, 9);
     this.graphics.fillStyle(0xd6c085, 0.9);
-    this.graphics.fillRect(632, 210, 208 * integrityRatio, 10);
+    this.graphics.fillRect(702, 210, 208 * integrityRatio, 10);
     this.graphics.lineStyle(2, 0x5ea8c9, 0.7);
-    this.graphics.strokeRect(632, 210, 208, 10);
+    this.graphics.strokeRect(702, 210, 208, 10);
 
     if (state.simulation.objective.integrity <= 0) {
       this.graphics.fillStyle(0xf0d27a, 0.8);
-      this.graphics.fillCircle(744, 166, 12);
+      this.graphics.fillCircle(806, 160, 12);
     }
   }
 
-  private drawBossHud(state: RunState): void {
-    const boss = state.simulation.enemies.find((enemy) => enemy.kind === "boss");
-    if (!boss) {
-      this.bossLabelText.setVisible(false);
+  private drawLanes(state: RunState): void {
+    if (state.simulation.encounter !== "swarm" || state.phase === "results" || state.phase === "run_over") {
       return;
     }
-
-    const width = 340;
-    const x = GAME_WIDTH / 2 - width / 2;
-    const y = 40;
-    const hpRatio = boss.hp / boss.maxHp;
-    const shieldRatio = boss.maxBossShield ? (boss.bossShield ?? 0) / boss.maxBossShield : 0;
-
-    this.graphics.fillStyle(0x07131c, 0.88);
-    this.graphics.fillRoundedRect(x, y, width, 44, 12);
-    this.graphics.lineStyle(1, boss.color, 0.72);
-    this.graphics.strokeRoundedRect(x, y, width, 44, 12);
-
-    this.graphics.fillStyle(0x14222d, 1);
-    this.graphics.fillRoundedRect(x + 12, y + 18, width - 24, 10, 5);
-    if (shieldRatio > 0) {
-      this.graphics.fillStyle(0x6dd4ff, 0.85);
-      this.graphics.fillRoundedRect(x + 12, y + 18, (width - 24) * shieldRatio, 10, 5);
+    const pulse = 0.12 + Math.sin(this.visualTime * 1.4) * 0.04;
+    for (const laneY of state.simulation.lanes.map((lane) => LANE_YS[lane])) {
+      for (let x = 930; x > 470; x -= 26) {
+        this.graphics.lineStyle(2, 0xff8f7a, pulse);
+        this.graphics.lineBetween(x, laneY, x - 12, laneY);
+      }
+      this.graphics.lineStyle(1, 0xff8f7a, pulse * 0.7);
+      this.graphics.lineBetween(470, laneY, SHIP_CENTER.x + 160, SHIP_CENTER.y + (laneY - SHIP_CENTER.y) * 0.4);
     }
-    this.graphics.fillStyle(boss.color, 0.9);
-    this.graphics.fillRoundedRect(x + 12, y + 30, (width - 24) * hpRatio, 8, 4);
-
-    this.graphics.fillStyle(0xf1e8ca, 0.92);
-    this.graphics.fillCircle(x + 18, y + 11, 3);
-
-    const telegraph = state.simulation.bossEncounter.telegraph;
-    const telegraphText = telegraph ? ` | ${telegraph}` : "";
-    this.phaseText.setDepth(2);
-    this.bossLabelText.setText(`${boss.name}${telegraphText}`).setPosition(GAME_WIDTH / 2, y + 4).setVisible(true);
   }
+
   private drawBots(state: RunState): void {
     for (const bot of state.ship.bots) {
       if (this.assemblyEffects.isBotSuppressed(bot.id)) {
@@ -398,13 +427,25 @@ export class RunScene extends Phaser.Scene {
 
   private drawEnemies(state: RunState): void {
     for (const enemy of state.simulation.enemies) {
+      if (enemy.hp <= 0) {
+        continue;
+      }
+      if (enemy.kind === "warship" || enemy.kind === "boss") {
+        this.drawCapitalShip(enemy);
+        continue;
+      }
+
       this.graphics.fillStyle(enemy.color, 1);
-      if (enemy.kind === "mini_boss" || enemy.kind === "boss") {
-        const width = enemy.kind === "boss" ? 52 : 44;
-        const height = enemy.kind === "boss" ? 42 : 36;
-        this.graphics.fillRoundedRect(enemy.x - width / 2, enemy.y - height / 2, width, height, 8);
-        this.graphics.lineStyle(2, enemy.kind === "boss" ? 0xf0d27a : 0xfee2a2, 0.8);
-        this.graphics.strokeRoundedRect(enemy.x - width / 2, enemy.y - height / 2, width, height, 8);
+      if (enemy.kind === "mini_boss") {
+        this.graphics.fillRoundedRect(enemy.x - 22, enemy.y - 18, 44, 36, 8);
+        this.graphics.lineStyle(2, 0xfee2a2, 0.8);
+        this.graphics.strokeRoundedRect(enemy.x - 22, enemy.y - 18, 44, 36, 8);
+      } else if (enemy.kind === "dart") {
+        this.graphics.fillTriangle(enemy.x - 10, enemy.y, enemy.x + 8, enemy.y - 7, enemy.x + 8, enemy.y + 7);
+      } else if (enemy.kind === "brute") {
+        this.graphics.fillRoundedRect(enemy.x - 17, enemy.y - 15, 34, 30, 4);
+        this.graphics.lineStyle(2, 0x2a1410, 0.8);
+        this.graphics.strokeRoundedRect(enemy.x - 17, enemy.y - 15, 34, 30, 4);
       } else {
         const points = [
           new Phaser.Geom.Point(enemy.x, enemy.y - 14),
@@ -416,64 +457,206 @@ export class RunScene extends Phaser.Scene {
       }
 
       const ratio = enemy.hp / enemy.maxHp;
+      const barWidth = enemy.kind === "dart" ? 20 : 36;
       this.graphics.fillStyle(0x1d1414, 1);
-      this.graphics.fillRect(enemy.x - 18, enemy.y - 26, 36, 4);
-      if (enemy.kind === "boss" && (enemy.maxBossShield ?? 0) > 0) {
-        const shieldRatio = (enemy.bossShield ?? 0) / (enemy.maxBossShield ?? 1);
-        this.graphics.fillStyle(0x6dd4ff, 0.9);
-        this.graphics.fillRect(enemy.x - 18, enemy.y - 32, 36 * shieldRatio, 4);
-      }
+      this.graphics.fillRect(enemy.x - barWidth / 2, enemy.y - 24, barWidth, 3);
       this.graphics.fillStyle(0xf7b098, 1);
-      this.graphics.fillRect(enemy.x - 18, enemy.y - 26, 36 * ratio, 4);
+      this.graphics.fillRect(enemy.x - barWidth / 2, enemy.y - 24, barWidth * ratio, 3);
     }
   }
 
-  private updateTexts(state: RunState): void {
-    this.phaseText.setText(
-      `Cycle ${state.cycle} | ${getPhaseLabel(state.phase)} | Hull ${Math.round(state.ship.hull)}/${state.ship.maxHull} | Shield ${Math.round(state.ship.shield)}/${state.ship.maxShield}`,
-    );
-    this.objectiveText.setText(
-      `Moon Objective\nIntegrity ${Math.max(0, Math.round(state.simulation.objective.integrity))}/${state.simulation.objective.maxIntegrity}`,
-    );
-    this.hintText.setText(this.getHintText(state));
+  private drawCapitalShip(enemy: EnemyInstance): void {
+    const scale = enemy.kind === "boss" ? 1.25 : 1;
+    const x = enemy.x;
+    const y = enemy.y;
+    const hull = [
+      new Phaser.Geom.Point(x - 62 * scale, y),
+      new Phaser.Geom.Point(x - 30 * scale, y - 24 * scale),
+      new Phaser.Geom.Point(x + 48 * scale, y - 26 * scale),
+      new Phaser.Geom.Point(x + 60 * scale, y - 10 * scale),
+      new Phaser.Geom.Point(x + 60 * scale, y + 10 * scale),
+      new Phaser.Geom.Point(x + 48 * scale, y + 26 * scale),
+      new Phaser.Geom.Point(x - 30 * scale, y + 24 * scale),
+    ];
+    this.graphics.fillStyle(0x1a1416, 0.95);
+    this.graphics.fillPoints(hull, true);
+    this.graphics.lineStyle(2, enemy.color, 0.9);
+    this.graphics.strokePoints(hull, true);
+    this.graphics.fillStyle(enemy.color, 0.75);
+    this.graphics.fillRect(x - 16 * scale, y - 8 * scale, 44 * scale, 16 * scale);
+    this.graphics.fillStyle(0xffe2b8, 0.6 + Math.sin(this.visualTime * 6) * 0.2);
+    this.graphics.fillCircle(x + 58 * scale, y, 4 * scale);
 
-    const upcoming = state.simulation.upcomingThreats.slice(0, 4);
-    upcoming.forEach((wave, index) => {
-      const text = this.threatTexts[index];
-      const spawned = index < state.simulation.threatCursor;
-      const countdown = Math.max(0, wave.time - state.simulation.elapsed);
-      text.setText(spawned ? `${wave.label} | deployed` : `${wave.label} | ${countdown.toFixed(1)}s`);
-      text.setColor(spawned ? "#7ec9a9" : wave.kind === "boss" ? "#f2e3b4" : "#f7dba0");
+    const weapons = enemy.weapons ?? [];
+    weapons.forEach((weapon, index) => {
+      const ratio = Math.min(1, weapon.charge / weapon.chargeTime);
+      const pipX = x - 26 * scale + index * 22;
+      const pipY = y + 34 * scale;
+      this.graphics.fillStyle(0x2a1d1d, 1);
+      this.graphics.fillRect(pipX, pipY, 18, 4);
+      this.graphics.fillStyle(weapon.kind === "missile" ? 0xffa45c : 0xff5e6c, 0.9);
+      this.graphics.fillRect(pipX, pipY, 18 * ratio, 4);
     });
 
-    for (const slot of state.ship.slots) {
-      const labelText = this.slotLabelTexts.get(slot.id);
-      labelText?.setColor(state.ui.selectedSlotIds.includes(slot.id) ? "#dfffee" : "#9cc1cf");
+    const shieldRatio = enemy.maxShield ? (enemy.shield ?? 0) / enemy.maxShield : 0;
+    if (shieldRatio > 0.02) {
+      this.graphics.lineStyle(2 + shieldRatio * 2, 0x6dd4ff, 0.18 + shieldRatio * 0.5);
+      this.graphics.strokeEllipse(x, y, 150 * scale, 82 * scale);
     }
   }
 
-  private drawOverlay(state: RunState): void {
-    if (state.simulation.bossEncounter.introTimer > 0 && state.simulation.bossEncounter.activeBossName) {
-      this.graphics.fillStyle(0x050b10, 0.46);
-      this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      this.overlayText
-        .setText(`${state.simulation.bossEncounter.activeBossName}\nAncient signal spike detected`)
-        .setVisible(true);
-      return;
+  private drawBeams(state: RunState): void {
+    const flicker = 0.25 + Math.abs(Math.sin(this.visualTime * 18)) * 0.25;
+    const drawBeam = (unit: { x: number; y: number; targetId?: string; color: number }) => {
+      const target = unit.targetId ? state.simulation.enemies.find((enemy) => enemy.id === unit.targetId) : undefined;
+      if (!target) {
+        return;
+      }
+      this.graphics.lineStyle(1.5, unit.color, flicker);
+      this.graphics.lineBetween(unit.x, unit.y, target.x, target.y);
+    };
+    state.ship.bots.forEach(drawBeam);
+    state.simulation.fighters.forEach(drawBeam);
+  }
+
+  private drawFighters(state: RunState): void {
+    for (const fighter of state.simulation.fighters) {
+      this.drawFighter(fighter);
     }
-    if (state.paused && state.phase === "execution") {
-      this.graphics.fillStyle(0x07131c, 0.52);
-      this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      this.overlayText.setText("Paused\nThe mission is fully frozen.").setVisible(true);
-      return;
+  }
+
+  private drawFighter(fighter: FighterInstance): void {
+    const cos = Math.cos(fighter.heading);
+    const sin = Math.sin(fighter.heading);
+    const point = (forward: number, side: number) =>
+      new Phaser.Geom.Point(fighter.x + cos * forward - sin * side, fighter.y + sin * forward + cos * side);
+    this.graphics.fillStyle(fighter.color, 1);
+    this.graphics.fillPoints([point(12, 0), point(-9, -9), point(-4, 0), point(-9, 9)], true);
+    this.graphics.fillStyle(0xffffff, 0.5 + Math.sin(this.visualTime * 10 + fighter.orbit) * 0.3);
+    this.graphics.fillCircle(fighter.x - cos * 7, fighter.y - sin * 7, 2);
+    if (fighter.hp < fighter.maxHp) {
+      this.graphics.fillStyle(0x182029, 1);
+      this.graphics.fillRect(fighter.x - 9, fighter.y + 12, 18, 2);
+      this.graphics.fillStyle(0xa8f29e, 1);
+      this.graphics.fillRect(fighter.x - 9, fighter.y + 12, 18 * (fighter.hp / fighter.maxHp), 2);
     }
-    if (state.pendingReward) {
-      this.graphics.fillStyle(0x07131c, 0.28);
-      this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      this.overlayText.setText("Reward choice ready\nPick one reward in the overlay.").setVisible(true);
-      return;
+  }
+
+  private drawProjectiles(state: RunState): void {
+    for (const projectile of state.simulation.projectiles) {
+      const angle = Math.atan2(projectile.targetY - projectile.y, projectile.targetX - projectile.x);
+      const tail = projectile.kind === "missile" ? 16 : projectile.kind === "laser" ? 14 : 10;
+      const tailX = projectile.x - Math.cos(angle) * tail;
+      const tailY = projectile.y - Math.sin(angle) * tail;
+      if (projectile.kind === "missile") {
+        this.graphics.lineStyle(3, 0xffe0b0, 0.35);
+        this.graphics.lineBetween(tailX, tailY, projectile.x, projectile.y);
+        this.graphics.fillStyle(projectile.color, 1);
+        this.graphics.fillCircle(projectile.x, projectile.y, 4);
+      } else {
+        this.graphics.lineStyle(projectile.kind === "laser" ? 3 : 2.5, projectile.color, 0.95);
+        this.graphics.lineBetween(tailX, tailY, projectile.x, projectile.y);
+      }
     }
-    this.overlayText.setVisible(false);
+  }
+
+  private drawImpacts(state: RunState): void {
+    for (const impact of state.simulation.impacts) {
+      const progress = impact.age / 0.4;
+      this.graphics.lineStyle(2, impact.color, 0.8 * (1 - progress));
+      this.graphics.strokeCircle(impact.x, impact.y, impact.size * (0.4 + progress * 0.8));
+    }
+  }
+
+  private collectBoosterEmitters(state: RunState): BoosterEmitter[] {
+    const emitters: BoosterEmitter[] = [];
+    for (const bot of state.ship.bots) {
+      if (bot.evade) {
+        emitters.push({ id: bot.id, x: bot.x, y: bot.y, scale: 1 });
+      }
+    }
+    for (const fighter of state.simulation.fighters) {
+      if (fighter.evade || fighter.launchBoost > 0) {
+        emitters.push({ id: fighter.id, x: fighter.x, y: fighter.y, scale: 0.7 });
+      }
+    }
+    for (const enemy of state.simulation.enemies) {
+      if (enemy.holdX !== undefined && enemy.x > enemy.holdX + 0.5) {
+        emitters.push({ id: enemy.id, x: enemy.x, y: enemy.y, scale: 2.4 });
+      } else if (enemy.knockback) {
+        emitters.push({ id: enemy.id, x: enemy.x, y: enemy.y, scale: 0.9 });
+      }
+    }
+    return emitters;
+  }
+
+  private drawBarrages(state: RunState): void {
+    this.barrageAlertTexts.forEach((text) => text.setVisible(false));
+    let alertIndex = 0;
+    for (const barrage of state.simulation.barrages) {
+      if (barrage.firedAge === undefined) {
+        this.drawBarrageWarning(barrage);
+        const alert = this.barrageAlertTexts[alertIndex];
+        alertIndex += 1;
+        alert
+          ?.setPosition(barrage.fromX, barrage.fromY - 52)
+          .setScale(1 + Math.sin(this.visualTime * 14) * 0.08)
+          .setVisible(true);
+      } else {
+        this.drawBarrageFlash(barrage);
+      }
+    }
+  }
+
+  private getBarrageCorridor(barrage: BarrageState, width: number): Phaser.Geom.Point[] {
+    const length = Math.hypot(barrage.toX - barrage.fromX, barrage.toY - barrage.fromY) || 1;
+    const offsetX = (-(barrage.toY - barrage.fromY) / length) * (width / 2);
+    const offsetY = ((barrage.toX - barrage.fromX) / length) * (width / 2);
+    return [
+      new Phaser.Geom.Point(barrage.fromX + offsetX, barrage.fromY + offsetY),
+      new Phaser.Geom.Point(barrage.toX + offsetX, barrage.toY + offsetY),
+      new Phaser.Geom.Point(barrage.toX - offsetX, barrage.toY - offsetY),
+      new Phaser.Geom.Point(barrage.fromX - offsetX, barrage.fromY - offsetY),
+    ];
+  }
+
+  private drawBarrageWarning(barrage: BarrageState): void {
+    const progress = Phaser.Math.Clamp(1 - barrage.timer / barrage.warning, 0, 1);
+    const finalBlink = barrage.timer < 0.5 ? Math.abs(Math.sin(this.visualTime * 22)) : 1;
+    const corridor = this.getBarrageCorridor(barrage, barrage.width);
+    this.graphics.fillStyle(BARRAGE_RED, (0.04 + progress * 0.12) * finalBlink);
+    this.graphics.fillPoints(corridor, true);
+    this.graphics.lineStyle(1.5, BARRAGE_RED, 0.2 + progress * 0.4);
+    this.graphics.lineBetween(corridor[0].x, corridor[0].y, corridor[1].x, corridor[1].y);
+    this.graphics.lineBetween(corridor[3].x, corridor[3].y, corridor[2].x, corridor[2].y);
+
+    // Rainbow-Survivors' charge windup aim line: 11px dashes, 7px gaps, 5px wide at 85% alpha.
+    const length = Math.hypot(barrage.toX - barrage.fromX, barrage.toY - barrage.fromY) || 1;
+    const dirX = (barrage.toX - barrage.fromX) / length;
+    const dirY = (barrage.toY - barrage.fromY) / length;
+    this.graphics.lineStyle(5, BARRAGE_RED, 0.85);
+    for (let start = 0; start < length; start += 18) {
+      const end = Math.min(length, start + 11);
+      this.graphics.lineBetween(
+        barrage.fromX + dirX * start,
+        barrage.fromY + dirY * start,
+        barrage.fromX + dirX * end,
+        barrage.fromY + dirY * end,
+      );
+    }
+
+    this.graphics.fillStyle(BARRAGE_RED, 0.35 + progress * 0.4);
+    this.graphics.fillCircle(barrage.fromX, barrage.fromY, 5 + progress * 11);
+    this.graphics.fillStyle(0xffffff, 0.4 + progress * 0.5);
+    this.graphics.fillCircle(barrage.fromX, barrage.fromY, 2 + progress * 4);
+  }
+
+  private drawBarrageFlash(barrage: BarrageState): void {
+    const fade = 1 - Phaser.Math.Clamp((barrage.firedAge ?? 0) / 0.35, 0, 1);
+    this.graphics.fillStyle(0xff5e6c, 0.8 * fade);
+    this.graphics.fillPoints(this.getBarrageCorridor(barrage, barrage.width * (0.6 + fade * 0.4)), true);
+    this.graphics.fillStyle(0xffffff, 0.9 * fade);
+    this.graphics.fillPoints(this.getBarrageCorridor(barrage, 6 + fade * 6), true);
   }
 
   private syncAssemblyEffects(state: RunState): void {
@@ -487,6 +670,7 @@ export class RunScene extends Phaser.Scene {
     for (const slot of state.ship.slots) {
       const previousModule = previous.slotModules[slot.id];
       if (!previousModule && slot.moduleId) {
+        playSound("place");
         this.assemblyEffects.animateModulePlacement(
           this.createModuleView(slot, slot.moduleId, slot.epicModuleId),
           this.createSlotView(slot),
@@ -628,36 +812,166 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private getHintText(state: RunState): string {
-    if (state.tutorial.active) {
-      switch (state.tutorial.stepId) {
-        case "place_solar_collector":
-          return "Click Solar Collector, then click an empty ship slot, like C3.";
-        case "place_mineral_drill":
-          return "Place the Mineral Drill. You will merge it with the Solar Collector in the next step.";
-        case "place_third_module":
-          return "Place one more module to round out the ship. Shield Emitter or Cargo Core are both good tutorial picks.";
-        case "merge_bot":
-          return "Select the Solar Collector and Mineral Drill, then press Create Bot in the Bots tab.";
-        case "select_doctrine":
-          return "Balanced is recommended for the first mission. Click it once in the Doctrine tab.";
-        case "start_mission":
-          return "The big Start Mission button is ready when you are.";
-        case "mission_running":
-          return "Watch the system run. You can change doctrine mid-mission, but each change costs 10% commitment.";
-        default:
-          return "Follow the highlighted action to keep the tutorial moving.";
-      }
-    }
-
-    if (state.phase === "planning") {
-      return "Place modules on the ship, select any pair or trio to preview a merge, and press Start Mission when the plan looks ready.";
-    }
-
-    return "Mission resolution is automatic. Space pauses instantly, and doctrine changes are optional but reduce commitment.";
-  }
-
   private findSlot(slots: ShipSlot[], slotId: string): ShipSlot | undefined {
     return slots.find((slot) => slot.id === slotId);
+  }
+
+  // Portrait phones turn the battlefield so enemies enter from the top and the ship sits under the thumb. The sim keeps
+  // its landscape coordinates; only this container rotates, and texts counter-rotate to stay upright.
+  private applyOrientation(portrait: boolean): void {
+    this.portrait = portrait;
+    const width = portrait ? GAME_HEIGHT : GAME_WIDTH;
+    const height = portrait ? GAME_WIDTH : GAME_HEIGHT;
+    this.scale.setGameSize(width, height);
+    this.cameras.main.setSize(width, height).setBounds(0, 0, width, height).setZoom(1).centerOn(width / 2, height / 2);
+    this.world.setRotation(portrait ? -Math.PI / 2 : 0).setPosition(0, portrait ? GAME_WIDTH : 0);
+    for (const child of this.world.list) {
+      if (child instanceof Phaser.GameObjects.Text) {
+        child.setRotation(-this.world.rotation);
+      }
+    }
+  }
+
+  private toScreen(point: { x: number; y: number }): { x: number; y: number } {
+    return this.portrait ? { x: point.y, y: GAME_WIDTH - point.x } : point;
+  }
+
+  private updateObserverCamera(state: RunState, dt: number): void {
+    const camera = this.cameras.main;
+    const center = { x: camera.width / 2, y: camera.height / 2 };
+    let focus = center;
+    let zoom = 1;
+    if (this.portrait && state.phase === "planning") {
+      focus = this.toScreen(BOARD_CENTER);
+      zoom = PLANNING_ZOOM;
+    } else if (this.portrait && state.phase === "execution") {
+      const warning = state.simulation.barrages.find((barrage) => barrage.firedAge === undefined);
+      const boss = state.simulation.enemies.find((enemy) => enemy.kind === "boss");
+      if (warning) {
+        focus = this.toScreen({ x: warning.fromX - 120, y: warning.fromY });
+        zoom = OBSERVER_ZOOM;
+      } else if (boss && state.simulation.bossEncounter.introTimer > 0) {
+        focus = this.toScreen(boss);
+        zoom = OBSERVER_ZOOM;
+      }
+    }
+    const ease = Math.min(1, dt * 3);
+    const nextZoom = camera.zoom + (zoom - camera.zoom) * ease;
+    const current = { x: camera.midPoint.x, y: camera.midPoint.y };
+    camera.setZoom(nextZoom);
+    camera.centerOn(current.x + (focus.x - current.x) * ease, current.y + (focus.y - current.y) * ease);
+  }
+
+  private emitBattleFeedback(state: RunState): void {
+    const simulation = state.simulation;
+    const next: FeedbackSnapshot = {
+      warningIds: new Set(simulation.barrages.filter((barrage) => barrage.firedAge === undefined).map((barrage) => barrage.id)),
+      firedIds: new Set(simulation.barrages.filter((barrage) => barrage.firedAge !== undefined).map((barrage) => barrage.id)),
+      fighterIds: new Set(simulation.fighters.map((fighter) => fighter.id)),
+      announcement: simulation.announcement?.text,
+      calloutCount: simulation.callouts.length,
+      launching: state.phase === "execution" && simulation.launchCountdown > 0,
+      bossIntro: simulation.bossEncounter.introTimer > 0,
+      hull: state.ship.hull,
+    };
+    const previous = this.feedbackSnapshot;
+    this.feedbackSnapshot = next;
+    if (!previous || state.phase !== "execution") {
+      return;
+    }
+
+    if (next.launching && !previous.launching) {
+      playSound("launch");
+      haptic(25);
+    }
+    if ([...next.warningIds].some((id) => !previous.warningIds.has(id))) {
+      playSound("lance_warning");
+      haptic(20);
+    }
+    if ([...next.firedIds].some((id) => !previous.firedIds.has(id))) {
+      playSound("lance_fire");
+      haptic([40, 30, 60]);
+      this.cameras.main.shake(220, 0.006);
+    }
+    for (const fighter of simulation.fighters) {
+      if (previous.fighterIds.has(fighter.id)) {
+        continue;
+      }
+      const port = this.findSlot(state.ship.slots, fighter.portSlotId);
+      if (port) {
+        this.launchFlashes.push({ x: port.x, y: port.y, age: 0, color: fighter.color });
+      }
+      playSound("fighter", 120);
+    }
+    if (next.announcement && next.announcement !== previous.announcement) {
+      playSound("announce");
+    }
+    if (next.calloutCount > previous.calloutCount) {
+      playSound("dodge");
+    }
+    if (next.bossIntro && !previous.bossIntro) {
+      haptic([80, 40, 80]);
+    }
+    if (previous.hull - next.hull >= BIG_HIT_HULL) {
+      playSound("hit", 150);
+      this.cameras.main.shake(160, 0.004);
+    }
+  }
+
+  private drawLaunchFlashes(): void {
+    for (const flash of this.launchFlashes) {
+      const progress = flash.age / LAUNCH_FLASH_TIME;
+      const size = SLOT_SIZE * (1 + progress * 0.35);
+      this.graphics.lineStyle(4 - progress * 3, flash.color, 0.9 * (1 - progress));
+      this.graphics.strokeRoundedRect(flash.x - size / 2, flash.y - size / 2, size, size, 16);
+      this.graphics.fillStyle(0xffffff, 0.35 * (1 - progress));
+      this.graphics.fillRoundedRect(flash.x - SLOT_SIZE / 2, flash.y - SLOT_SIZE / 2, SLOT_SIZE, SLOT_SIZE, 14);
+    }
+  }
+
+  private drawTapMarker(state: RunState): void {
+    if (!state.tutorial.active || state.phase !== "planning" || getTutorialHandTarget(state)) {
+      return;
+    }
+    const step = state.tutorial.stepId;
+    if (!["place_solar_collector", "place_mineral_drill", "place_third_module", "merge_bot"].includes(step)) {
+      return;
+    }
+    const targetId = [...this.getTutorialSlotTargets(state)].find((slotId) => !state.ui.selectedSlotIds.includes(slotId));
+    const slot = targetId ? this.findSlot(state.ship.slots, targetId) : undefined;
+    if (!slot) {
+      return;
+    }
+    const pulse = (this.visualTime * 1.6) % 1;
+    this.graphics.lineStyle(4, 0xffffff, 0.8 * (1 - pulse));
+    this.graphics.strokeCircle(slot.x, slot.y, 14 + pulse * 30);
+    this.graphics.fillStyle(0xffffff, 0.9);
+    this.graphics.fillCircle(slot.x, slot.y, 9 + Math.sin(this.visualTime * 8) * 1.5);
+    this.graphics.fillStyle(0xf0cf7d, 1);
+    this.graphics.fillCircle(slot.x, slot.y, 5);
+  }
+
+  private updateSlotLabels(state: RunState): void {
+    for (const slot of state.ship.slots) {
+      this.slotLabelTexts.get(slot.id)?.setColor(state.ui.selectedSlotIds.includes(slot.id) ? "#dfffee" : "#9cc1cf");
+    }
+  }
+
+  private drawCallouts(state: RunState): void {
+    this.calloutTexts.forEach((text, index) => {
+      const callout = state.phase === "execution" ? state.simulation.callouts[index] : undefined;
+      if (!callout) {
+        text.setVisible(false);
+        return;
+      }
+      const pop = Math.min(1, callout.age / 0.12);
+      text
+        .setText(callout.text)
+        .setColor(`#${callout.color.toString(16).padStart(6, "0")}`)
+        .setPosition(callout.x, callout.y)
+        .setScale(0.6 + pop * 0.5 - Math.max(0, callout.age - 0.12) * 0.1)
+        .setAlpha(Math.min(1, 2.4 - callout.age * 2))
+        .setVisible(true);
+    });
   }
 }

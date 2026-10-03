@@ -29,24 +29,24 @@ interface TutorialSnapshot {
 const TUTORIAL_STEP_VIEWS: Record<TutorialStepId, TutorialStepView> = {
   intro: {
     title: "Build a calm plan",
-    body: "Build a ship. Combine modules into bots. Let your plan run.",
+    body: "Build a ship. Make bots. Watch it run.",
     targetSelectors: ["[data-tutorial-target='ship-board']", "[data-tutorial-target='module-panel']"],
     continueLabel: "Show Me",
     requiresContinue: true,
   },
   place_solar_collector: {
-    title: "Step 1: Place Solar",
-    body: "Click Solar Collector, then click an empty ship slot, like C3.",
+    title: "Step 1: Solar",
+    body: "Tap Solar, then tap a ship slot.",
     targetSelectors: ["[data-tutorial-target='module-solar_collector']", "[data-tutorial-target='ship-board']"],
   },
   place_mineral_drill: {
-    title: "Step 2: Place Drill",
-    body: "Now place a Mineral Drill. You will merge it with the Solar Collector in the next step.",
+    title: "Step 2: Drill",
+    body: "Tap Drill, then a slot beside Solar.",
     targetSelectors: ["[data-tutorial-target='module-mineral_drill']", "[data-tutorial-target='ship-board']"],
   },
   place_third_module: {
-    title: "Step 3: Add one more system",
-    body: "Place a Shield Emitter or Cargo Core in another open slot. Three modules makes the plan feel complete.",
+    title: "Step 3: One more",
+    body: "Add a Shield or Cargo module.",
     targetSelectors: [
       "[data-tutorial-target='module-shield_emitter']",
       "[data-tutorial-target='module-cargo_core']",
@@ -54,42 +54,65 @@ const TUTORIAL_STEP_VIEWS: Record<TutorialStepId, TutorialStepView> = {
     ],
   },
   merge_bot: {
-    title: "Step 4: Create a bot",
-    body: "Select the Solar Collector and Mineral Drill, then press Create Bot. That pair becomes an autonomous worker.",
+    title: "Step 4: Make a bot",
+    body: "Tap Solar and Drill, then Create Bot.",
     targetSelectors: ["[data-tutorial-target='ship-board']", "[data-tutorial-target='merge-panel']"],
   },
   bots_explain: {
     title: "Bots run themselves",
-    body: "Bots act automatically during missions. Your job is to prepare the ship, not click faster.",
-    targetSelectors: ["[data-tutorial-target='ship-board']", "[data-tutorial-target='bots-summary']"],
+    body: "They mine and fight on their own.",
+    targetSelectors: ["[data-tutorial-target='ship-board']"],
     continueLabel: "Got It",
     requiresContinue: true,
   },
   select_doctrine: {
-    title: "Step 5: Choose a doctrine",
-    body: "Balanced is the safest first plan. Click Balanced once so the ship knows how to prioritize.",
+    title: "Step 5: Doctrine",
+    body: "Tap Balanced for your first mission.",
     targetSelectors: ["[data-tutorial-target='doctrine-panel']"],
   },
   start_mission: {
-    title: "Step 6: Start the mission",
-    body: "When you are ready, press Start Mission. The ship will handle the rest on its own.",
+    title: "Step 6: Launch",
+    body: "Tap Launch. The ship does the rest.",
     targetSelectors: ["[data-tutorial-target='start-mission']"],
   },
   mission_running: {
-    title: "Mission Running",
-    body: "Your ship is now running automatically. You can change doctrine during the mission, but each change costs 10% commitment. Watch the bot mine, defend, and follow your doctrine.",
-    targetSelectors: ["[data-tutorial-target='ship-board']", "[data-tutorial-target='mission-status']"],
+    title: "Mission running",
+    body: "Sit back. Pause anytime from the header.",
+    targetSelectors: ["[data-tutorial-target='ship-board']"],
     continueLabel: "Keep Watching",
     requiresContinue: true,
   },
   mission_results: {
-    title: "Mission Debrief",
-    body: "This summary shows what your plan earned, what it lost, and what you learned. Every run should teach you something useful.",
+    title: "Debrief",
+    body: "Stars, chests, and your best bot.",
     targetSelectors: ["[data-tutorial-target='summary-modal']"],
     continueLabel: "Finish Tutorial",
     requiresContinue: true,
   },
 };
+
+export function getTutorialHandTarget(state: RunState): string | undefined {
+  if (!state.tutorial.active || state.phase !== "planning") {
+    return undefined;
+  }
+  const selected = state.ui.selectedFabricationModuleId;
+  switch (state.tutorial.stepId) {
+    case "place_solar_collector":
+      return selected === "solar_collector" ? undefined : "[data-tutorial-target='module-solar_collector']";
+    case "place_mineral_drill":
+      return selected === "mineral_drill" ? undefined : "[data-tutorial-target='module-mineral_drill']";
+    case "place_third_module":
+      return selected === "shield_emitter" || selected === "cargo_core" ? undefined : "[data-tutorial-target='module-shield_emitter']";
+    case "merge_bot":
+      return state.ui.selectedSlotIds.length >= 2 ? "[data-tutorial-target='merge-panel'] [data-action='merge-selected']" : undefined;
+    case "select_doctrine":
+      return "[data-doctrine='balanced']";
+    case "start_mission":
+      return "[data-tutorial-target='start-mission']";
+    default:
+      return undefined;
+  }
+}
 
 function countModules(state: RunState, moduleId: ModuleId): number {
   return state.ship.slots.filter((slot) => slot.moduleId === moduleId).length;
@@ -126,6 +149,8 @@ export function captureTutorialSnapshot(state: RunState): TutorialSnapshot {
       pulse_cannon: countModules(state, "pulse_cannon"),
       cargo_core: countModules(state, "cargo_core"),
       repair_node: countModules(state, "repair_node"),
+      booster: countModules(state, "booster"),
+      launch_port: countModules(state, "launch_port"),
     },
   };
 }
@@ -190,7 +215,7 @@ export function getTutorialStepView(state: RunState): TutorialStepView | undefin
 }
 
 export function isTutorialCommandAllowed(state: RunState, command: GameCommand): boolean {
-  if (!state.tutorial.active) {
+  if (!state.tutorial.active || command.type === "start_new_run") {
     return true;
   }
 
@@ -233,10 +258,15 @@ export function isTutorialCommandAllowed(state: RunState, command: GameCommand):
         command.type === "skip_tutorial" ||
         command.type === "advance_tutorial" ||
         command.type === "toggle_pause" ||
-        command.type === "choose_reward"
+        command.type === "toggle_execution_speed"
       );
     case "mission_results":
-      return command.type === "skip_tutorial" || command.type === "advance_tutorial" || command.type === "choose_reward";
+      return (
+        command.type === "skip_tutorial" ||
+        command.type === "advance_tutorial" ||
+        command.type === "open_chest" ||
+        command.type === "choose_reward"
+      );
     default:
       return true;
   }

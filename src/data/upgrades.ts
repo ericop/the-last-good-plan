@@ -46,4 +46,19 @@ export const UPGRADE_DEFINITIONS: Record<UpgradeId, UpgradeDefinition> = {
       { solar: 18, minerals: 18, scrap: 150 },
     ],
   },
+  hangar_tech: {
+    id: "hangar_tech",
+    name: "Hangar Tech",
+    summary: "Unlocks Launch Ports. Your ship becomes a carrier that fields its own wing.",
+    perLevelText: "+12% fighter hull and firepower, +4% dodge, faster launches, and +1 wing size every other level.",
+    costs: [
+      { solar: 10, minerals: 10, scrap: 40 },
+      { solar: 10, minerals: 12, scrap: 56 },
+      { solar: 12, minerals: 14, scrap: 72 },
+      { solar: 14, minerals: 16, scrap: 88 },
+      { solar: 16, minerals: 18, scrap: 104 },
+      { solar: 18, minerals: 20, scrap: 120 },
+      { solar: 20, minerals: 22, scrap: 136 },
+    ],
+  },
 };

@@ -39,9 +39,9 @@ describe("merge discovery logic", () => {
 describe("threat scheduling", () => {
   it("creates predictable waves ending in the mini-boss", () => {
     const schedule = createThreatSchedule(2);
-    expect(schedule).toHaveLength(4);
-    expect(schedule[0]).toMatchObject({ time: 6, kind: "scavenger", count: 6 });
-    expect(schedule[3]).toMatchObject({ time: 36, kind: "mini_boss", count: 1 });
+    expect(schedule).toHaveLength(5);
+    expect(schedule[0]).toMatchObject({ time: 4, kind: "dart", count: 7, spacing: 0.7 });
+    expect(schedule[4]).toMatchObject({ time: 36, kind: "mini_boss", count: 1 });
   });
 });
 

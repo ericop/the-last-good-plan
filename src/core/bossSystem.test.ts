@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createRunState } from "./createRunState";
-import { handleBossDefeat, isBossCycle, spawnBoss, createCycleThreatSchedule } from "./bossManager";
+import { handleBossDefeat, isBossCycle, spawnBoss } from "./bossManager";
+import { createCycleThreatSchedule } from "./encounters";
 import { createDefaultDiscoveryLog } from "./discovery";
 import { processCommand } from "./processCommand";
 import type { SaveData } from "../types/gameTypes";
@@ -35,7 +36,7 @@ describe("boss system", () => {
     expect(threats.filter((wave) => wave.kind === "scavenger").length).toBe(2);
   });
 
-  it("offers an epic module reward on boss defeat", () => {
+  it("queues an epic module chest for the debrief on boss defeat", () => {
     const state = createRunState(createSaveData(), "execution");
     state.cycle = 10;
     const boss = spawnBoss(10);
@@ -43,9 +44,10 @@ describe("boss system", () => {
     const handled = handleBossDefeat(state, boss);
 
     expect(handled).toBe(true);
-    expect(state.pendingReward?.source).toBe("boss");
-    expect(state.pendingReward?.choices[0]).toEqual({ kind: "epic_module", id: "dawn_prism" });
-    expect(state.paused).toBe(true);
+    expect(state.simulation.chests[0]?.source).toBe("boss");
+    expect(state.simulation.chests[0]?.choices[0]).toEqual({ kind: "epic_module", id: "dawn_prism" });
+    expect(state.pendingReward).toBeUndefined();
+    expect(state.paused).toBe(false);
   });
 
   it("grants epic modules to the fabrication pool and applies their merge traits", () => {
