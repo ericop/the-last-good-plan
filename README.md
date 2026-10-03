@@ -40,6 +40,7 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
   - In a few moments of certain doom, a passing alien species saves the day, asks nothing back, and tells you to
     do the same for someone else
   - Lose a level and retry it from that level's checkpoint; progress is saved between sessions
+  - Beat the final boss and its epic core rides along into your next Uncharted run, ready to merge into a super bot
 - Discovery log with unknown, discovered, and known/mastered-lite states
 - Three encounter types that rotate by mission:
   - Swarm Defense: tower-defense style streams of darts, scavengers, and brutes marching down three lanes, ending in a mini-boss
