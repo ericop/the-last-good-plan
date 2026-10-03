@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createRunState, prepareExecutionState } from "./createRunState";
+import { createRunState, prepareExecutionState, selectRoute } from "./createRunState";
 import { createDefaultDiscoveryLog } from "./discovery";
-import { createCycleThreatSchedule, createLaneEnemy, getEncounterKind, spawnWarship } from "./encounters";
+import { createCycleThreatSchedule, createLaneEnemy, getDefaultRoute, getEncounterKind, spawnWarship } from "./encounters";
 import { createFighter, getPortLoadout } from "./hangar";
 import { processCommand } from "./processCommand";
 import { stepSimulation } from "./simulation";
@@ -20,7 +20,9 @@ function createSaveData(): SaveData {
 function createExecutionState(cycle: number): RunState {
   const state = createRunState(createSaveData(), "planning");
   state.cycle = cycle;
+  selectRoute(state, getDefaultRoute(cycle));
   prepareExecutionState(state);
+  state.simulation.launchCountdown = 0;
   return state;
 }
 

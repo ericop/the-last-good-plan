@@ -30,6 +30,7 @@ export function createThreatSchedule(cycle: number): ThreatWave[] {
       kind: "dart",
       count: scaled(5, 2),
       spacing: 0.45,
+      announce: "BIG WAVE INBOUND",
     },
     {
       time: 36,
@@ -49,6 +50,7 @@ export function createDuelSchedule(cycle: number, warshipId: string, warshipName
       kind: "warship",
       count: 1,
       warshipId,
+      announce: "WARSHIP INBOUND",
     },
     {
       time: 18,

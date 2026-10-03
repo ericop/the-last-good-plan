@@ -278,13 +278,13 @@ export function handleBossDefeat(state: RunState, enemy: EnemyInstance): boolean
   state.simulation.bossEncounter.rewardEpicId = definition.reward;
   state.simulation.bossEncounter.telegraph = "Boss Defeated";
   state.simulation.bossEncounter.telegraphTimer = 1.4;
-  state.pendingReward = {
+  state.simulation.chests.push({
     source: "boss",
     title: "Boss Defeated",
     description: `Install ${epic.name} into your fabrication pool. Epic Modules are single-use parts that permanently alter the bot they merge into.`,
     choices: [{ kind: "epic_module", id: definition.reward }],
-  };
-  state.paused = true;
+  });
+  state.simulation.announcement = { text: "BOSS DESTROYED", timer: 2.2 };
   addMessage(state, `${definition.name} destroyed. ${epic.name} recovered.`);
   return true;
 }

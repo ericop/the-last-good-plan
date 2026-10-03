@@ -9,6 +9,7 @@ import type {
   Projectile,
   RunState,
   ShipWeaponDefinition,
+  RouteId,
   ThreatWave,
   WarshipDefinition,
 } from "../types/gameTypes";
@@ -31,19 +32,82 @@ export function getWarshipForCycle(cycle: number): WarshipDefinition {
   return WARSHIP_DEFINITIONS[duelIndex % WARSHIP_DEFINITIONS.length];
 }
 
-export function getEncounterName(cycle: number): string {
-  switch (getEncounterKind(cycle)) {
+export interface RouteDefinition {
+  encounter: EncounterKind;
+  blurb: string;
+  tip: string;
+}
+
+export const ROUTES: Record<RouteId, RouteDefinition> = {
+  swarm: {
+    encounter: "swarm",
+    blurb: "Hold three lanes against a stream of small raiders.",
+    tip: "Cannons and Booster pulses hold the lanes.",
+  },
+  duel: {
+    encounter: "duel",
+    blurb: "Trade fire with a parked warship that charges a lance.",
+    tip: "Boosters dodge lances. Shields soak lasers.",
+  },
+  boss: {
+    encounter: "boss",
+    blurb: "A capital-class boss with its own weapons and tricks.",
+    tip: "Long fight. Bring repairs and steady damage.",
+  },
+  nebula: {
+    encounter: "swarm",
+    blurb: "Shields are offline in the ion haze. Every wreck pays double scrap.",
+    tip: "Repair Nodes matter more than shields here.",
+  },
+  derelict: {
+    encounter: "swarm",
+    blurb: "A lighter fight around a drifting hulk. +20 solar and +30 minerals on arrival.",
+    tip: "A safe mission to rebuild your fleet.",
+  },
+};
+
+export const DERELICT_SUPPLIES = { solar: 20, minerals: 30, scrap: 0 };
+
+export function getDefaultRoute(cycle: number): RouteId {
+  return getEncounterKind(cycle);
+}
+
+export function getRouteOptions(cycle: number, firstMission: boolean): RouteId[] {
+  if (isBossCycle(cycle)) {
+    return ["boss"];
+  }
+  if (firstMission) {
+    return ["swarm"];
+  }
+  const fallback = getDefaultRoute(cycle);
+  const extras = (cycle >= DUEL_CYCLE_INTERVAL
+    ? (["swarm", "duel", "nebula", "derelict"] as RouteId[])
+    : (["swarm", "nebula", "derelict"] as RouteId[])
+  ).filter((route) => route !== fallback);
+  const options: RouteId[] = [fallback];
+  for (let offset = 0; options.length < 3 && offset < extras.length; offset += 1) {
+    options.push(extras[(cycle + offset) % extras.length]);
+  }
+  return [...new Set(options)];
+}
+
+export function getEncounterName(cycle: number, route: RouteId = getDefaultRoute(cycle)): string {
+  switch (route) {
     case "boss":
       return `Boss: ${getBossForCycle(cycle).name}`;
     case "duel":
       return `Ship Duel: ${getWarshipForCycle(cycle).name}`;
+    case "nebula":
+      return "Nebula Run";
+    case "derelict":
+      return "Derelict Salvage";
     default:
       return "Swarm Defense";
   }
 }
 
-export function createCycleThreatSchedule(cycle: number): ThreatWave[] {
-  switch (getEncounterKind(cycle)) {
+export function createCycleThreatSchedule(cycle: number, route: RouteId = getDefaultRoute(cycle)): ThreatWave[] {
+  switch (route) {
     case "boss": {
       const boss = getBossForCycle(cycle);
       const supportCount = 2 + Math.floor(cycle / 20);
@@ -57,17 +121,21 @@ export function createCycleThreatSchedule(cycle: number): ThreatWave[] {
       const warship = getWarshipForCycle(cycle);
       return createDuelSchedule(cycle, warship.id, warship.name);
     }
+    case "derelict":
+      return createThreatSchedule(cycle).slice(0, 3);
     default:
       return createThreatSchedule(cycle);
   }
 }
 
-export function getCycleDuration(cycle: number): number {
-  switch (getEncounterKind(cycle)) {
+export function getCycleDuration(cycle: number, route: RouteId = getDefaultRoute(cycle)): number {
+  switch (route) {
     case "boss":
       return 64;
     case "duel":
       return 70;
+    case "derelict":
+      return 34;
     default:
       return 46;
   }
@@ -182,6 +250,7 @@ function lockBarrage(state: RunState, enemy: EnemyInstance, weapon: ShipWeaponDe
     warning,
     timer: warning,
     noticed: [],
+    evaders: [],
   });
 }
 

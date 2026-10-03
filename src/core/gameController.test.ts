@@ -121,7 +121,8 @@ describe("game controller updates", () => {
 
     expect(state.simulation.bossDefeated).toBe(true);
     expect(state.simulation.duration).toBe(startingDuration + 10);
-    expect(state.pendingReward).toBeDefined();
+    expect(state.simulation.chests).toHaveLength(1);
+    expect(state.paused).toBe(false);
   });
 
   it("does not add extra time after the mini-boss if the moon is already mined out", () => {
@@ -163,7 +164,8 @@ describe("game controller updates", () => {
 
     expect(state.simulation.bossDefeated).toBe(true);
     expect(state.simulation.duration).toBe(startingDuration);
-    expect(state.pendingReward).toBeDefined();
+    expect(state.simulation.chests.map((chest) => chest.source).sort()).toEqual(["boss_chest", "moon"]);
+    expect(state.paused).toBe(false);
   });
 
   it("runs missions at double speed when fast forward is enabled", () => {
@@ -178,6 +180,7 @@ describe("game controller updates", () => {
     state.ship.bots.push(createBotStub());
 
     controller.dispatch({ type: "begin_execution" });
+    controller.getState().simulation.launchCountdown = 0;
     controller.dispatch({ type: "toggle_execution_speed" });
     controller.update(1);
 

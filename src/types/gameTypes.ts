@@ -20,6 +20,7 @@ export type ArtifactType = "passive" | "doctrine" | "merge_support";
 export type RewardSource = "moon" | "boss_chest" | "boss";
 export type EnemyKind = "scavenger" | "dart" | "brute" | "mini_boss" | "warship" | "boss";
 export type EncounterKind = "swarm" | "duel" | "boss";
+export type RouteId = "swarm" | "duel" | "boss" | "nebula" | "derelict";
 export type FighterKind = "interceptor" | "skiff" | "tender";
 export type ProjectileKind = "bolt" | "laser" | "missile";
 
@@ -254,6 +255,7 @@ export interface EnemyInstance {
   maxShield?: number;
   shieldRegen?: number;
   holdX?: number;
+  spawnedAt?: number;
   weapons?: ShipWeaponState[];
   launch?: { interval: number; count: number; timer: number };
   knockback?: { vx: number; vy: number; timer: number };
@@ -272,8 +274,39 @@ export interface ThreatWave {
   kind: EnemyKind;
   count: number;
   spacing?: number;
+  announce?: string;
   bossId?: string;
   warshipId?: string;
+}
+
+export interface Callout {
+  text: string;
+  x: number;
+  y: number;
+  age: number;
+  color: number;
+}
+
+export interface KillfeedEntry {
+  killer: string;
+  victim: string;
+  color: number;
+  time: number;
+}
+
+export interface StarResult {
+  label: string;
+  earned: boolean;
+}
+
+export interface MvpSummary {
+  name: string;
+  role: BotRole;
+  color: number;
+  damage: number;
+  mined: number;
+  healing: number;
+  dodges: number;
 }
 
 export interface PendingSpawn {
@@ -332,6 +365,7 @@ export interface BarrageState {
   timer: number;
   firedAge?: number;
   noticed: string[];
+  evaders: string[];
 }
 
 export interface ImpactEffect {
@@ -363,6 +397,7 @@ export interface MetaProgress {
   totalCyclesCompleted: number;
   totalPerfectCommitments: number;
   totalArtifactsRecovered: number;
+  totalStars?: number;
 }
 
 export interface OnboardingProgress {
@@ -391,6 +426,8 @@ export interface CycleSummary {
   discoveries: string[];
   rewards: string[];
   perfectCommitmentReward: ResourcePool;
+  stars: StarResult[];
+  mvp?: MvpSummary;
 }
 
 export interface TutorialState {
@@ -423,8 +460,20 @@ export interface CycleStats {
 export interface SimulationState {
   elapsed: number;
   duration: number;
+  route: RouteId;
   encounter: EncounterKind;
   encounterName: string;
+  lanes: number[];
+  launchCountdown: number;
+  shieldsOffline: boolean;
+  scrapMultiplier: number;
+  chests: RewardOffer[];
+  callouts: Callout[];
+  killfeed: KillfeedEntry[];
+  announcement?: { text: string; timer: number };
+  dodgesByUnit: Record<string, number>;
+  fallenBots: BotInstance[];
+  startingHull: number;
   upcomingThreats: ThreatWave[];
   threatCursor: number;
   pendingSpawns: PendingSpawn[];
@@ -485,6 +534,7 @@ export interface RunState {
   onboarding: OnboardingProgress;
   tutorial: TutorialState;
   missionPrep: MissionPrepState;
+  routeOptions: RouteId[];
 }
 
 export interface SaveData {

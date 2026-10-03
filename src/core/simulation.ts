@@ -7,6 +7,8 @@ import type {
   EvadeOrder,
   FighterInstance,
   ModuleId,
+  MvpSummary,
+  StarResult,
   RewardSource,
   RunState,
   ShipSlot,
@@ -44,6 +46,9 @@ const BOOSTER_PULSE_INTERVAL = 4;
 const BOOSTER_PULSE_RADIUS = 210;
 const BOOSTER_PUSH_DISTANCE = 80;
 const KNOCKBACK_TIME = 0.35;
+const ANNOUNCEMENT_TIME = 2.2;
+const CALLOUT_LIFETIME = 1.2;
+const QUICK_KILL_TIME = 20;
 
 interface DamageSource {
   kind: "module" | "bot" | "fighter";
@@ -109,6 +114,7 @@ function healShip(state: RunState, amount: number): void {
 
 function removeDeadBots(state: RunState): void {
   const before = state.ship.bots.length;
+  state.simulation.fallenBots.push(...state.ship.bots.filter((bot) => bot.hp <= 0));
   state.ship.bots = state.ship.bots.filter((bot) => bot.hp > 0);
   state.simulation.cycleStats.lost.botsDestroyed += before - state.ship.bots.length;
   state.simulation.fighters = state.simulation.fighters.filter((fighter) => fighter.hp > 0);
@@ -120,23 +126,49 @@ function offerReward(state: RunState, source: RewardSource): boolean {
     addMessage(state, "No new artifact patterns remain in the vault.");
     return false;
   }
-  state.pendingReward = {
+  state.simulation.chests.push({
     source,
     title: source === "moon" ? "Ancient Artifact" : "Recovered Chest",
     description:
       source === "moon"
-        ? "Choose one artifact for the run. The moon seam will stay open while you decide."
-        : "Choose one recovered relic from the broken warform chest.",
+        ? "Recovered from the exhausted moon seam. Choose one artifact for the run."
+        : "Recovered from the broken mini-boss. Choose one relic for the run.",
     choices: choices.map((choice) => ({ kind: "artifact", id: choice.id })),
-  };
-  state.paused = true;
+  });
+  addMessage(state, "Chest recovered. It opens at the debrief.");
   return true;
 }
 
-function destroyEnemy(state: RunState, enemy: EnemyInstance): boolean {
+function announce(state: RunState, text: string): void {
+  state.simulation.announcement = { text, timer: ANNOUNCEMENT_TIME };
+}
+
+function addCallout(state: RunState, text: string, x: number, y: number, color: number): void {
+  state.simulation.callouts.push({ text, x, y, age: 0, color });
+}
+
+const KILLFEED_LENGTH = 6;
+
+function describeKiller(source: DamageSource): { name: string; color: number } {
+  if (source.attackerBot) {
+    return { name: source.attackerBot.name, color: source.attackerBot.color };
+  }
+  if (source.attackerFighter) {
+    const kind = source.attackerFighter.kind;
+    return { name: `${kind[0].toUpperCase()}${kind.slice(1)} wing`, color: source.attackerFighter.color };
+  }
+  return { name: "Pulse Cannon", color: 0xffc38a };
+}
+
+function destroyEnemy(state: RunState, enemy: EnemyInstance, source: DamageSource): boolean {
+  const killer = describeKiller(source);
+  state.simulation.killfeed = [
+    { killer: killer.name, victim: enemy.name, color: killer.color, time: state.simulation.elapsed },
+    ...state.simulation.killfeed,
+  ].slice(0, KILLFEED_LENGTH);
   const salvageMultiplier =
     getGlobalArtifactMultiplier(state, "salvageMultiplier") * (1 + getCargoCoreCount(state.ship.slots) * 0.06);
-  const scrapGain = enemy.scrapReward * salvageMultiplier;
+  const scrapGain = enemy.scrapReward * salvageMultiplier * state.simulation.scrapMultiplier;
   grantResources(state, "scrap", scrapGain);
 
   addImpact(state, enemy.x, enemy.y, isCapitalShip(enemy) ? 70 : 22, enemy.color);
@@ -147,6 +179,8 @@ function destroyEnemy(state: RunState, enemy: EnemyInstance): boolean {
     grantResources(state, "minerals", bounty);
     state.simulation.duration = Math.min(state.simulation.duration, state.simulation.elapsed + 4);
     state.simulation.pendingSpawns = [];
+    const quickKill = enemy.spawnedAt !== undefined && state.simulation.elapsed - enemy.spawnedAt < QUICK_KILL_TIME;
+    announce(state, quickKill ? "WARSHIP DOWN · UNDER 20s" : "WARSHIP DOWN");
     addMessage(state, `${enemy.name} breaks apart. +${bounty} minerals salvaged. Jumping out in 4s.`);
     return true;
   }
@@ -200,7 +234,7 @@ function damageEnemy(state: RunState, enemy: EnemyInstance, amount: number, sour
   enemy.hp -= damage;
   if (enemy.hp <= 0) {
     enemy.hp = 0;
-    return destroyEnemy(state, enemy);
+    return destroyEnemy(state, enemy, source);
   }
   return false;
 }
@@ -215,17 +249,20 @@ function spawnWave(state: RunState, wave: ThreatWave): void {
   }
 
   if (wave.kind === "warship") {
-    state.simulation.enemies.push(spawnWarship(state.cycle, wave.warshipId));
+    const warship = spawnWarship(state.cycle, wave.warshipId);
+    warship.spawnedAt = state.simulation.elapsed;
+    state.simulation.enemies.push(warship);
     addMessage(state, `${wave.label} is powering weapons.`);
     return;
   }
 
   const spacing = wave.spacing ?? 0.6;
+  const lanes = state.simulation.lanes;
   for (let index = 0; index < wave.count; index += 1) {
     state.simulation.pendingSpawns.push({
       time: state.simulation.elapsed + index * spacing,
       kind: wave.kind,
-      lane: wave.kind === "mini_boss" ? 1 : (index + state.simulation.threatCursor) % LANE_YS.length,
+      lane: wave.kind === "mini_boss" ? 1 : lanes[(index + state.simulation.threatCursor) % lanes.length],
     });
   }
   addMessage(state, `${wave.label} entering the lanes.`);
@@ -627,6 +664,12 @@ function fireBarrage(state: RunState, barrage: BarrageState): void {
     damageShip(state, barrage.damage * 0.6);
     addImpact(state, nearestToShip.x, nearestToShip.y, 40, 0xff2850);
   }
+  for (const unit of [...state.ship.bots, ...state.simulation.fighters]) {
+    if (unit.hp > 0 && barrage.evaders.includes(unit.id) && !isInBarrage(barrage, unit, 10)) {
+      state.simulation.dodgesByUnit[unit.id] = (state.simulation.dodgesByUnit[unit.id] ?? 0) + 1;
+      addCallout(state, "PERFECT DODGE!", unit.x, unit.y - 22, 0xf2a6ff);
+    }
+  }
   const dodged = barrage.noticed.length - hits;
   if (barrage.noticed.length > 0) {
     addMessage(state, `${barrage.name} fired: ${Math.max(0, dodged)} dodged, ${hits} hit.`);
@@ -653,6 +696,7 @@ function tickBarrages(state: RunState, dt: number): boolean {
       const dodge = "recipeId" in unit ? getBotDodge(unit) : unit.dodge;
       if (Math.random() < dodge) {
         unit.evade = planEvade(barrage, unit);
+        barrage.evaders.push(unit.id);
       }
     }
 
@@ -758,6 +802,20 @@ function stepProjectiles(state: RunState, dt: number): boolean {
   return majorUpdate;
 }
 
+function ageAnnouncements(state: RunState, dt: number): void {
+  for (const callout of state.simulation.callouts) {
+    callout.age += dt;
+    callout.y -= 18 * dt;
+  }
+  state.simulation.callouts = state.simulation.callouts.filter((callout) => callout.age < CALLOUT_LIFETIME);
+  if (state.simulation.announcement) {
+    state.simulation.announcement.timer -= dt;
+    if (state.simulation.announcement.timer <= 0) {
+      state.simulation.announcement = undefined;
+    }
+  }
+}
+
 function ageImpacts(state: RunState, dt: number): void {
   for (const impact of state.simulation.impacts) {
     impact.age += dt;
@@ -779,6 +837,43 @@ function maybeTriggerObjectiveReward(state: RunState): boolean {
     return offerReward(state, "moon");
   }
   return false;
+}
+
+function scoreStars(state: RunState, survived: boolean): StarResult[] {
+  const simulation = state.simulation;
+  const objective =
+    simulation.encounter === "duel"
+      ? { label: "Warship destroyed", met: simulation.warshipDefeated }
+      : simulation.encounter === "boss"
+        ? { label: "Boss destroyed", met: simulation.bossDefeated }
+        : { label: "Moon fully mined", met: simulation.objective.integrity <= 0 };
+  return [
+    { label: "Survived", earned: survived },
+    { label: objective.label, earned: survived && objective.met },
+    { label: "No bots lost", earned: survived && simulation.cycleStats.lost.botsDestroyed === 0 },
+  ];
+}
+
+function pickMvp(state: RunState): MvpSummary | undefined {
+  const scored = [...state.ship.bots, ...state.simulation.fallenBots]
+    .map((bot) => {
+      const dodges = state.simulation.dodgesByUnit[bot.id] ?? 0;
+      const { damage, mined, healing } = bot.contribution;
+      return { bot, dodges, score: damage + mined * 1.5 + healing * 1.2 + dodges * 15 };
+    })
+    .sort((left, right) => right.score - left.score)[0];
+  if (!scored || scored.score <= 0) {
+    return undefined;
+  }
+  return {
+    name: scored.bot.name,
+    role: scored.bot.role,
+    color: scored.bot.color,
+    damage: Math.round(scored.bot.contribution.damage),
+    mined: Math.round(scored.bot.contribution.mined),
+    healing: Math.round(scored.bot.contribution.healing),
+    dodges: scored.dodges,
+  };
 }
 
 function getDebriefText(state: RunState): string {
@@ -819,6 +914,8 @@ function finalizeCycle(state: RunState): void {
 
   state.meta.totalCyclesCompleted += 1;
   const survived = state.ship.hull > 0;
+  const stars = scoreStars(state, survived);
+  state.meta.totalStars = (state.meta.totalStars ?? 0) + stars.filter((star) => star.earned).length;
   if (survived && state.simulation.encounter === "duel" && !state.simulation.warshipDefeated) {
     addMessage(state, "The warship disengaged before it broke.");
   }
@@ -830,6 +927,8 @@ function finalizeCycle(state: RunState): void {
     discoveries: [...state.simulation.cycleStats.discoveries],
     rewards: [...state.simulation.cycleStats.rewardsEarned],
     perfectCommitmentReward: perfectReward,
+    stars,
+    mvp: pickMvp(state),
   };
   state.phase = state.ship.hull > 0 ? "results" : "run_over";
   state.paused = false;
@@ -840,8 +939,17 @@ export function stepSimulation(state: RunState, dt: number): boolean {
     return false;
   }
 
+  if (state.simulation.launchCountdown > 0) {
+    state.simulation.launchCountdown = Math.max(0, state.simulation.launchCountdown - dt);
+    return true;
+  }
+
   let majorUpdate = false;
   state.simulation.elapsed = Math.min(state.simulation.duration, state.simulation.elapsed + dt);
+  if (state.simulation.shieldsOffline) {
+    state.ship.shield = 0;
+  }
+  ageAnnouncements(state, dt);
 
   while (
     state.simulation.threatCursor < state.simulation.upcomingThreats.length &&
@@ -849,6 +957,9 @@ export function stepSimulation(state: RunState, dt: number): boolean {
   ) {
     const wave = state.simulation.upcomingThreats[state.simulation.threatCursor];
     spawnWave(state, wave);
+    if (wave.announce) {
+      announce(state, wave.announce);
+    }
     state.simulation.threatCursor += 1;
     majorUpdate = true;
   }

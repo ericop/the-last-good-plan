@@ -3,7 +3,7 @@ import { MODULE_DEFINITIONS } from "../data/modules";
 import { UPGRADE_DEFINITIONS } from "../data/upgrades";
 import type { GameCommand } from "../types/commands";
 import type { BotInstance, ModuleId, RunState, SaveData, ShipSlot } from "../types/gameTypes";
-import { createRunState, prepareExecutionState, resetForNextCycle } from "./createRunState";
+import { createRunState, prepareExecutionState, resetForNextCycle, selectRoute } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
 import { isLaunchPortUnlocked } from "./hangar";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
@@ -318,8 +318,23 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       recalculateShipStats(state);
       return state;
     }
+    case "choose_route": {
+      if (state.phase !== "planning" || !state.routeOptions.includes(command.routeId) || state.simulation.route === command.routeId) {
+        return state;
+      }
+      selectRoute(state, command.routeId);
+      addMessage(state, `Course set: ${state.simulation.encounterName}.`);
+      return state;
+    }
+    case "open_chest": {
+      if (state.phase !== "results" || state.pendingReward) {
+        return state;
+      }
+      state.pendingReward = state.simulation.chests.shift();
+      return state;
+    }
     case "continue_from_results": {
-      if (state.phase === "results") {
+      if (state.phase === "results" && !state.pendingReward && state.simulation.chests.length === 0) {
         resetForNextCycle(state);
       }
       return state;
