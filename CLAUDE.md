@@ -24,8 +24,8 @@ direction. The chosen direction is **Hybrid Bridge** (variant C): one sim, a por
   commands a tutorial step does not list. Add new commands to the steps where they are reachable.
 - **Never pause mid-mission for a choice.** Rewards found during a fight go to `simulation.chests` and open at the
   debrief. Story beats during a fight are non-blocking comm messages; dialog with choices happens between levels.
-- **Runs default to campaign mode.** Tests about general mechanics should create runs with `{ mode: "roguelike" }`,
-  or they will hit level renames and intro dialog.
+- **Runs default to Uncharted (`roguelike`).** Story tests must create runs with `{ mode: "campaign" }`. Story mode
+  is locked until `campaign.storyUnlocked`; test saves with `totalCyclesCompleted > 0` count as unlocked.
 - **Story script is data.** Edit `src/data/story.ts`; `story.test.ts` rejects unknown speakers, unreachable choice
   tags, and em dashes in dialog.
 - **All HUD text lives in the DOM**, never in the canvas, so it stays readable at phone scale.

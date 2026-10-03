@@ -6,7 +6,7 @@ import type { BotInstance, ModuleId, RunState, SaveData, ShipSlot } from "../typ
 import { createRunState, prepareExecutionState, resetForNextCycle, selectNode } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
 import { isLaunchPortUnlocked } from "./hangar";
-import { advanceDialog, chooseDialog, isCampaignFinale, parseSeed, restoreCheckpoint } from "./story";
+import { advanceDialog, chooseDialog, isCampaignFinale, parseSeed, restoreCheckpoint, skipDialog } from "./story";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
 import {
   addMessage,
@@ -95,6 +95,9 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return createRunState(withProgress(state, saveData), "planning", { mode: state.mode });
     }
     case "start_campaign": {
+      if (!state.campaign.storyUnlocked) {
+        return state;
+      }
       if (!command.fresh) {
         const restored = restoreCheckpoint(state);
         if (restored) {
@@ -104,9 +107,6 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return createRunState(withProgress(state, saveData), "planning", { mode: "campaign" });
     }
     case "start_roguelike": {
-      if (!state.campaign.roguelikeUnlocked) {
-        return state;
-      }
       return createRunState(withProgress(state, saveData), "planning", { mode: "roguelike", seed: parseSeed(command.seed) });
     }
     case "retry_level": {
@@ -117,6 +117,10 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
     }
     case "advance_dialog": {
       advanceDialog(state);
+      return state;
+    }
+    case "skip_dialog": {
+      skipDialog(state);
       return state;
     }
     case "choose_dialog": {

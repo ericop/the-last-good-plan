@@ -51,6 +51,8 @@ const ANNOUNCEMENT_TIME = 2.2;
 const CALLOUT_LIFETIME = 1.2;
 const QUICK_KILL_TIME = 20;
 const HERO_REGEN = 3;
+const FIRST_CLEAR_TIP =
+  "You win a mission by surviving until the clock hits zero. Leftover enemies just fly home: kills pay scrap, and the stars track bonus goals. Story mode is now unlocked on the main menu.";
 const HERO_ARMOR = 0.6;
 
 interface DamageSource {
@@ -958,10 +960,12 @@ function finalizeCycle(state: RunState): void {
     perfectCommitmentReward: perfectReward,
     stars,
     mvp: pickMvp(state),
+    tip: survived && !state.campaign.storyUnlocked ? FIRST_CLEAR_TIP : undefined,
   };
   state.phase = survived ? "results" : "run_over";
   state.paused = false;
   if (survived) {
+    state.campaign.storyUnlocked = true;
     recordCampaignClear(state);
     startOutroDialog(state);
   }

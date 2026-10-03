@@ -50,17 +50,23 @@ The key future-proofing choice is that UI and scene input never mutate gameplay 
 
 ## Campaign and Story
 
-- `state.mode` is `campaign` (default) or `roguelike` (Uncharted, unlocked by `campaign.roguelikeUnlocked`).
+- `state.mode` is `roguelike` (Uncharted, the default) or `campaign` (story mode, gated by `campaign.storyUnlocked`,
+  which `finalizeCycle` sets on the first survived mission; older saves with any completed mission count as
+  unlocked). The first survived mission also puts `FIRST_CLEAR_TIP` in `summary.tip` so players learn that surviving
+  the clock is the win condition.
 - All script lives in `src/data/story.ts`: speakers, the ten `CAMPAIGN_LEVELS` (route, intro dialog with choices,
   timed comm events, outro, optional escort, rescue, and extra waves), alien rescue lines, and Uncharted bulletins.
 - `src/core/story.ts` runs it. `applyCampaignLevel` renames the encounter, swaps in the authored warship, and adds
   extra waves whenever a campaign simulation is built. `armMissionStory` adds the escort and arms rescues at launch
   (in Uncharted it rolls seeded bulletins and rescues). `tickStory` fires timed comms (choosing `byTag` lines from
   the intro choice), locks the doom lance, and triggers the rescue.
-- Dialog is `state.story.dialog`, advanced by `advance_dialog` and `choose_dialog`; it blocks
+- Dialog is `state.story.dialog`, advanced by `advance_dialog` and `choose_dialog` and cleared by `skip_dialog`; it blocks
   `continue_from_results` and hides the tutorial bubble while open.
 - A campaign checkpoint (a JSON snapshot of the run) is saved at the start of every level in
   `state.campaign.checkpoint` and persisted with the save; `retry_level` and "Continue" restore it.
+- The ☰ pause menu is UI-only state in `UIManager` (`menuOpen`, `pausedByMenu`): it pauses execution on open and
+  resumes on close only if it did the pausing. Main menu and tutorial replay need a second tap mid-run. On phones the
+  dock is Ship, Fleet, ☰, and the discovery log opens from the menu.
 
 ## Tests
 

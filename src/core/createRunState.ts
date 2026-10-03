@@ -135,9 +135,11 @@ export function createRunState(
 ): RunState {
   const discovery: DiscoveryLog = JSON.parse(JSON.stringify(saveData.discovery));
   const firstMission = isFirstMission({ cycle: 1, meta: saveData.meta });
-  const mode = options.mode ?? "campaign";
+  const mode = options.mode ?? "roguelike";
   const sector =
-    mode === "campaign" ? createCampaignMap() : generateSectorMap(0, options.seed ?? Math.floor(Math.random() * SEED_SPACE), false);
+    mode === "campaign"
+      ? createCampaignMap()
+      : generateSectorMap(0, options.seed ?? Math.floor(Math.random() * SEED_SPACE), firstMission);
   const firstNode = sector.columns[0][0];
   const state: RunState = {
     phase,
@@ -188,7 +190,11 @@ export function createRunState(
     },
     mode,
     story: { introSeen: [] },
-    campaign: { highestLevelCleared: 0, roguelikeUnlocked: false, ...saveData.campaign },
+    campaign: {
+      highestLevelCleared: 0,
+      ...saveData.campaign,
+      storyUnlocked: saveData.campaign?.storyUnlocked || saveData.meta.totalCyclesCompleted > 0,
+    },
   };
   if (phase === "planning") {
     beginPlanning(state);

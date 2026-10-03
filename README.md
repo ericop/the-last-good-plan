@@ -27,16 +27,19 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
 - Commitment bonus that starts at +50% and drops by 10% per doctrine change during execution
 - 3x3 ship board with adjacency-aware merges
 - Six base modules and ten merge outcomes
-- Story campaign: ten hand-built levels across Sector 1. The Governor of Halcyon "gently" relocated your parents to
+- Play starts in Uncharted, the seeded roguelike: branching sectors, a boss every tenth jump, and a 6-character
+  seed you can share; story bulletins and good-neighbor rescues can turn up along the way
+- You win a mission by surviving until the clock hits zero. Leftover enemies fly home; kills pay scrap and the
+  stars track bonus goals. The first debrief says so
+- Story mode unlocks after your first cleared mission: ten hand-built levels across Sector 1. The Governor of Halcyon "gently" relocated your parents to
   the stars, so you, Pip, Rook, and Mars borrow a mining hauler to bring them home
-  - Dialog before and after each level, with choices that change your friends' replies (never the main story)
+  - Dialog before and after each level, with choices that change your friends' replies (never the main story).
+    `Skip` (or `Esc`) skips the rest of any conversation
   - Escort levels where a friend's ship flies beside yours and must survive
   - Governor check-ins with news from home and clues about where your parents went
   - In a few moments of certain doom, a passing alien species saves the day, asks nothing back, and tells you to
     do the same for someone else
   - Lose a level and retry it from that level's checkpoint; progress is saved between sessions
-- Uncharted: beat the campaign to unlock the seeded roguelike. Branching sectors, a boss every tenth jump, and a
-  6-character seed you can share; story bulletins and good-neighbor rescues can turn up along the way
 - Discovery log with unknown, discovered, and known/mastered-lite states
 - Three encounter types that rotate by mission:
   - Swarm Defense: tower-defense style streams of darts, scavengers, and brutes marching down three lanes, ending in a mini-boss
@@ -54,7 +57,8 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
 - Two native layouts over one game: a portrait phone layout with the battlefield turned so enemies come down toward
   your ship, and a desktop "arena" layout with hotkeys, fleet frames, a wave timeline and a killfeed
 - Mission debrief with 1 to 3 stars, count-up rewards, an MVP bot, and every chest collected during the fight
-- Sound and haptics (mute from the top-right corner)
+- Sound and haptics
+- A ☰ menu (or `Esc`) that pauses the fight and holds Resume, sound, bot discoveries, the tutorial, and the main menu
 - Carrier play: research Hangar Tech to build Launch Ports that launch a fighter wing on their own during battle
   - Ports next to a Mineral Drill build mining skiffs, next to a Repair Node build tenders, otherwise interceptors
   - Adjacent Pulse Cannons, Shield Emitters, and Solar Collectors boost wing firepower, hull, and launch speed
@@ -84,7 +88,8 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
 - Click `Commit Merge` to consume both modules and assemble a bot.
 - Click doctrine buttons to choose a starting doctrine or optionally switch it mid-cycle.
 - Press `Space` to pause or unpause instantly during execution.
-- Click `Discovery Log` to inspect known and unknown merge outcomes.
+- Open the ☰ menu (or press `Esc`) for bot discoveries, sound, the tutorial, and the main menu. It pauses a running
+  fight and resumes when closed.
 - Choose one artifact when a moon reward or boss chest appears.
 
 ## Gameplay Notes

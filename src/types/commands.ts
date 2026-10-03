@@ -23,5 +23,6 @@ export type GameCommand =
   | { type: "retry_level" }
   | { type: "return_to_menu" }
   | { type: "advance_dialog" }
+  | { type: "skip_dialog" }
   | { type: "choose_dialog"; optionIndex: number }
   | { type: "open_chest" };
