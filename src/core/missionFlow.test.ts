@@ -150,6 +150,30 @@ describe("sector map routes", () => {
     expect(state.sector.path).toEqual([]);
   });
 
+  it("plays real missions along a sector path, beats the boss, and starts sector 2", () => {
+    const saveData = createSaveData();
+    const state = createRunState(saveData, "planning");
+    buildSturdyShip(state, saveData);
+    const visited: string[] = [];
+    for (let jump = 1; jump <= SECTOR_LENGTH; jump += 1) {
+      const options = getReachableNodes(state);
+      const pick = options[jump % options.length];
+      processCommand(state, { type: "choose_node", nodeId: pick.id }, saveData);
+      visited.push(pick.route);
+      state.ship.maxHull = 5000;
+      state.ship.hull = 5000;
+      playMission(state, saveData);
+      expect(state.phase).toBe("results");
+      openAllChests(state, saveData);
+      processCommand(state, { type: "continue_from_results" }, saveData);
+      state.resources = { solar: 999, minerals: 999, scrap: 999 };
+    }
+    expect(visited[visited.length - 1]).toBe("boss");
+    expect(state.cycle).toBe(SECTOR_LENGTH + 1);
+    expect(state.sector.index).toBe(1);
+    expect(getReachableNodes(state).every((node) => node.column === 0)).toBe(true);
+  });
+
   it("only offers nodes linked from the last jump", () => {
     const saveData = createSaveData();
     const state = createRunState(saveData, "planning");
