@@ -9,7 +9,7 @@ import type {
   SimulationState,
 } from "../types/gameTypes";
 import { createTutorialState } from "./tutorial";
-import { createCycleThreatSchedule, getCycleDuration } from "./bossManager";
+import { createCycleThreatSchedule, getCycleDuration, getEncounterKind, getEncounterName } from "./encounters";
 import { createEmptyPool, getBotStagingPosition } from "./utils";
 
 interface CreateRunStateOptions {
@@ -44,9 +44,17 @@ function createSimulationState(cycle: number): SimulationState {
   return {
     elapsed: 0,
     duration: getCycleDuration(cycle),
+    encounter: getEncounterKind(cycle),
+    encounterName: getEncounterName(cycle),
     upcomingThreats: createCycleThreatSchedule(cycle),
     threatCursor: 0,
+    pendingSpawns: [],
     enemies: [],
+    projectiles: [],
+    fighters: [],
+    impacts: [],
+    moduleTimers: {},
+    warshipDefeated: false,
     objective: {
       integrity: 90 + cycle * 18,
       maxIntegrity: 90 + cycle * 18,
@@ -112,6 +120,7 @@ export function createRunState(
         mining_array: 0,
         defense_grid: 0,
         support_bay: 0,
+        hangar_tech: 0,
       },
       artifacts: [],
       epicInventory: createEmptyEpicInventory(),
@@ -188,6 +197,6 @@ export function prepareExecutionState(state: RunState): void {
   state.simulation = createSimulationState(state.cycle);
   state.simulation.cycleStats.discoveries = preMissionDiscoveries;
   state.simulation.messageLog = [
-    `Mission ${state.cycle} started. Bots are running at 150% efficiency while commitment holds.`,
+    `${state.simulation.encounterName} started. Bots are running at 150% efficiency while commitment holds.`,
   ];
 }

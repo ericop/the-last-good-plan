@@ -8,6 +8,8 @@ import type {
   RewardSource,
   RunState,
   ShipSlot,
+  ShipWeaponDefinition,
+  ShipWeaponState,
 } from "../types/gameTypes";
 import { ARTIFACT_DEFINITIONS } from "../data/artifacts";
 import { MERGE_RECIPES } from "../data/merges";
@@ -68,6 +70,14 @@ export function moveToward(
 
 export function makeBotId(): string {
   return `bot_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function createWeaponStates(weapons: ShipWeaponDefinition[], damageScale: number): ShipWeaponState[] {
+  return weapons.map((weapon) => ({
+    ...weapon,
+    damage: Math.round(weapon.damage * damageScale * 10) / 10,
+    charge: weapon.chargeTime * 0.5,
+  }));
 }
 
 export function makeEnemyId(): string {

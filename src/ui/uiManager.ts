@@ -5,6 +5,7 @@ import { MODULE_DEFINITIONS } from "../data/modules";
 import { UPGRADE_DEFINITIONS } from "../data/upgrades";
 import type { GameController } from "../core/gameController";
 import { getDiscoveryDescriptor, getMergePreviewFromModules } from "../core/discovery";
+import { isLaunchPortUnlocked } from "../core/hangar";
 import { getMissionReadiness, getPhaseLabel, getTutorialStepView } from "../core/tutorial";
 import { getArtifactById, getBotCapacity, getSlotById } from "../core/utils";
 import type { DockPanelId, FabricationOptionId, ModuleId, RunState, UpgradeId } from "../types/gameTypes";
@@ -234,9 +235,9 @@ export class UIManager {
         <span>efficiency</span>
       </div>
       <div class="hud-card wide">
-        <span class="eyebrow">Threat Preview</span>
-        <strong class="threat-headline">${nextThreatText}</strong>
-        <span>${Math.max(0, state.simulation.upcomingThreats.length - state.simulation.threatCursor)} waves queued</span>
+        <span class="eyebrow">${state.phase === "planning" ? "Next Encounter" : "Encounter"}</span>
+        <strong class="threat-headline">${state.simulation.encounterName}</strong>
+        <span>${nextThreatText}</span>
       </div>
     `;
   }
@@ -302,6 +303,8 @@ export class UIManager {
         <div><span class="eyebrow">Shield</span><strong>${Math.round(state.ship.shield)}/${state.ship.maxShield}</strong></div>
         <div data-tutorial-target="bots-summary"><span class="eyebrow">Bots</span><strong>${state.ship.bots.length}/${getBotCapacity(state)}</strong></div>
         <div><span class="eyebrow">Moon</span><strong>${Math.max(0, Math.round(state.simulation.objective.integrity))}</strong></div>
+        <div><span class="eyebrow">Ports</span><strong>${state.ship.slots.filter((slot) => slot.moduleId === "launch_port").length}</strong></div>
+        <div><span class="eyebrow">Fighters</span><strong>${state.simulation.fighters.length}</strong></div>
       </div>
       <div class="panel-block">
         <span class="eyebrow">Selection</span>
@@ -494,12 +497,13 @@ export class UIManager {
       .map((module) => {
         const card = getFabricationCardData(module.id);
         const selected = state.ui.selectedFabricationModuleId === module.id;
-        const disabled = state.phase !== "planning";
+        const locked = module.id === "launch_port" && !isLaunchPortUnlocked(state);
+        const disabled = state.phase !== "planning" || locked;
         return `
           <button class="module-card ${selected ? "selected" : ""}" data-action="fabricate" data-module="${module.id}" data-tutorial-target="module-${module.id}" ${disabled ? "disabled" : ""}>
             <strong>${card.name}</strong>
             <span>${card.description}</span>
-            <small>${card.costLabel}</small>
+            <small>${locked ? "Requires Hangar Tech Lv.1 (Ship tab)" : card.costLabel}</small>
           </button>
         `;
       })
@@ -597,7 +601,7 @@ export class UIManager {
           <div class="mission-copy">
             <span class="eyebrow">Primary Action</span>
             <strong>Start Mission</strong>
-            <span class="mission-hint">${readiness.ready ? "Your ship is ready to run itself." : readiness.reason}</span>
+            <span class="mission-hint">${readiness.ready ? `Next: ${state.simulation.encounterName}. Your ship is ready to run itself.` : readiness.reason}</span>
           </div>
           <button class="mission-button primary-cta ${readiness.ready ? "ready" : ""}" data-action="begin-execution" data-tutorial-target="start-mission" ${readiness.ready ? "" : "disabled"}>
             Start Mission
@@ -865,7 +869,7 @@ export class UIManager {
   private getGeneralGuidanceBody(state: RunState): string {
     switch (state.phase) {
       case "planning":
-        return "Place modules on the ship, merge any pair or trio into a bot when it makes sense, then press Start Mission.";
+        return `Next up: ${state.simulation.encounterName}. Place modules, merge pairs or trios into bots, and once Hangar Tech is online, build Launch Ports to field a fighter wing.`;
       case "execution":
         return "Bots mine, defend, and support automatically. Doctrine changes are optional and commitment always stays visible.";
       case "results":

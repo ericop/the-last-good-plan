@@ -55,5 +55,15 @@ export const MODULE_DEFINITIONS: Record<ModuleId, ModuleDefinition> = {
     icon: "R",
     fabricationCost: { solar: 10, minerals: 8, scrap: 0 },
   },
+  launch_port: {
+    id: "launch_port",
+    name: "Launch Port",
+    shortName: "LPT",
+    description:
+      "Carrier hangar. Launches fighters on its own during missions. Next to a drill it builds mining skiffs, next to repair it builds tenders. Cannons, shields, and solar sharpen the wing. Cannot be merged.",
+    color: 0x8fb4ff,
+    icon: "L",
+    fabricationCost: { solar: 12, minerals: 10, scrap: 8 },
+  },
 };
 

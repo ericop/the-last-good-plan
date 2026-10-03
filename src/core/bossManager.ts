@@ -1,10 +1,9 @@
 import { BOSS_DEFINITIONS } from "../data/bosses";
 import { ENEMY_DEFINITIONS } from "../data/enemies";
 import { getEpicModuleById } from "../data/epicModuleRegistry";
-import { ENEMY_SPAWN_POINT, SHIP_CENTER } from "../game/constants";
-import type { BossBehavior, BossDefinition, BotInstance, EnemyInstance, RunState, ThreatWave } from "../types/gameTypes";
-import { addMessage, distance, makeEnemyId } from "./utils";
-import { createThreatSchedule } from "../data/waves";
+import { ENEMY_SPAWN_POINT, LANE_YS, SHIP_CENTER, WARSHIP_HOLD_POINT } from "../game/constants";
+import type { BossBehavior, BossDefinition, BotInstance, EnemyInstance, RunState } from "../types/gameTypes";
+import { addMessage, createWeaponStates, distance, makeEnemyId } from "./utils";
 
 const BOSS_CYCLE_INTERVAL = 10;
 const BOSS_INTRO_DURATION = 1.5;
@@ -33,40 +32,6 @@ export function getBossForCycle(cycleNumber: number): BossDefinition {
   return BOSS_DEFINITIONS[getBossIndex(cycleNumber) % BOSS_DEFINITIONS.length];
 }
 
-export function createCycleThreatSchedule(cycleNumber: number): ThreatWave[] {
-  if (!isBossCycle(cycleNumber)) {
-    return createThreatSchedule(cycleNumber);
-  }
-
-  const boss = getBossForCycle(cycleNumber);
-  const supportCount = 2 + Math.floor(cycleNumber / 20);
-  return [
-    {
-      time: 6,
-      label: `Boss screen x${supportCount}`,
-      kind: "scavenger",
-      count: supportCount,
-    },
-    {
-      time: 14,
-      label: `Boss arrival: ${boss.name}`,
-      kind: "boss",
-      count: 1,
-      bossId: boss.id,
-    },
-    {
-      time: 28,
-      label: `Escort reinforcements x${supportCount + 1}`,
-      kind: "scavenger",
-      count: supportCount + 1,
-    },
-  ];
-}
-
-export function getCycleDuration(cycleNumber: number): number {
-  return isBossCycle(cycleNumber) ? 58 : 46;
-}
-
 export function spawnBoss(cycleNumber: number): EnemyInstance {
   const definition = getBossForCycle(cycleNumber);
   const cycleScale = 1 + getBossIndex(cycleNumber) * 0.18;
@@ -86,16 +51,18 @@ export function spawnBoss(cycleNumber: number): EnemyInstance {
     color: definition.color,
     hp: Math.round(definition.maxHp * cycleScale),
     maxHp: Math.round(definition.maxHp * cycleScale),
-    x: ENEMY_SPAWN_POINT.x - 12,
-    y: SHIP_CENTER.y,
+    x: ENEMY_SPAWN_POINT.x + 60,
+    y: WARSHIP_HOLD_POINT.y,
     speed: definition.speed,
     attack: Math.round(definition.attack * cycleScale),
     range: definition.range,
     scrapReward: 42 + cycleNumber * 2,
     cooldown: 0,
     bossId: definition.id,
-    bossShield: Math.round(definition.shield * cycleScale),
-    maxBossShield: Math.round(definition.shield * cycleScale),
+    shield: Math.round(definition.shield * cycleScale),
+    maxShield: Math.round(definition.shield * cycleScale),
+    holdX: WARSHIP_HOLD_POINT.x + 20,
+    weapons: createWeaponStates(definition.weapons, cycleScale),
     bossBehaviorTimers: behaviorTimers,
   };
 }
@@ -224,14 +191,14 @@ function triggerBossBehavior(
 ): void {
   switch (behavior.kind) {
     case "periodic_shield":
-      bossEnemy.bossShield = Math.min(bossEnemy.maxBossShield ?? 0, (bossEnemy.bossShield ?? 0) + behavior.amount);
+      bossEnemy.shield = Math.min(bossEnemy.maxShield ?? 0, (bossEnemy.shield ?? 0) + behavior.amount);
       state.simulation.bossEncounter.telegraph = `${definition.name} restores shielding`;
       state.simulation.bossEncounter.telegraphTimer = 1;
       addMessage(state, `${definition.name} restores shielding.`);
       bossEnemy.bossBehaviorTimers![key] = behavior.interval;
       break;
     case "spawning_minions":
-      spawnBossMinions(state, behavior.count);
+      spawnBossMinions(state, bossEnemy, behavior.count);
       state.simulation.bossEncounter.telegraph = `${definition.name} unfolds escorts`;
       state.simulation.bossEncounter.telegraphTimer = 1;
       addMessage(state, `${definition.name} deploys escort drones.`);
@@ -255,7 +222,7 @@ function triggerBossBehavior(
   }
 }
 
-function spawnBossMinions(state: RunState, count: number): void {
+function spawnBossMinions(state: RunState, bossEnemy: EnemyInstance, count: number): void {
   const definition = ENEMY_DEFINITIONS.scavenger;
   for (let index = 0; index < count; index += 1) {
     state.simulation.enemies.push({
@@ -265,8 +232,8 @@ function spawnBossMinions(state: RunState, count: number): void {
       color: definition.color,
       hp: definition.hp + state.cycle * 2,
       maxHp: definition.hp + state.cycle * 2,
-      x: ENEMY_SPAWN_POINT.x - 30 + index * 24,
-      y: 190 + index * 44,
+      x: bossEnemy.x - 40 + index * 24,
+      y: LANE_YS[index % LANE_YS.length],
       speed: definition.speed + 2,
       attack: definition.attack + Math.floor(state.cycle / 3),
       range: definition.range,

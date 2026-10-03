@@ -5,6 +5,7 @@ import type { GameCommand } from "../types/commands";
 import type { BotInstance, ModuleId, RunState, SaveData, ShipSlot } from "../types/gameTypes";
 import { createRunState, prepareExecutionState, resetForNextCycle } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
+import { isLaunchPortUnlocked } from "./hangar";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
 import {
   addMessage,
@@ -154,6 +155,10 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
           return state;
         }
 
+        if (selectedFabricationId === "launch_port" && !isLaunchPortUnlocked(state)) {
+          addMessage(state, "Launch Ports need Hangar Tech. Upgrade it from the Ship tab first.");
+          return state;
+        }
         const cost = MODULE_DEFINITIONS[selectedFabricationId].fabricationCost;
         if (!canAfford(state.resources, cost)) {
           addMessage(state, "Insufficient resources for that module.");

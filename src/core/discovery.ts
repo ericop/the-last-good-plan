@@ -59,6 +59,9 @@ interface MergePreviewResult {
 }
 
 function getInvalidMergeText(modules: readonly ModuleId[]): string {
+  if (modules.includes("launch_port")) {
+    return "Launch Ports are hangar structure. They cannot be merged into a bot.";
+  }
   if (modules.length < 2) {
     return "Select at least two placed modules to preview a merge.";
   }

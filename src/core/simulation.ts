@@ -1,30 +1,41 @@
 import { DOCTRINES } from "../data/doctrines";
-import { ENEMY_DEFINITIONS } from "../data/enemies";
-import { MODULE_DEFINITIONS } from "../data/modules";
-import { OBJECTIVE_POINT, SHIP_CENTER, ENEMY_SPAWN_POINT } from "../game/constants";
-import type { BotInstance, EnemyInstance, ModuleId, RewardSource, RunState, ShipSlot, ThreatWave } from "../types/gameTypes";
+import { ENEMY_SPAWN_POINT, LANE_YS, OBJECTIVE_POINT, SHIP_CENTER } from "../game/constants";
+import type {
+  BotInstance,
+  EnemyInstance,
+  FighterInstance,
+  ModuleId,
+  RewardSource,
+  RunState,
+  ShipSlot,
+  ThreatWave,
+} from "../types/gameTypes";
 import { noteRecipeSuccess } from "./discovery";
+import { createLaneEnemy, getCapitalShip, getLaneWaypoint, isCapitalShip, spawnWarship, tickCapitalShip } from "./encounters";
+import { createFighter, getPortLoadout, PORT_FIRST_LAUNCH_DELAY } from "./hangar";
 import {
   addMessage,
   addToPool,
-  clamp,
   countAdjacentWithModule,
   distance,
-  getArtifactById,
   getDoctrineArtifactBonus,
   getGlobalArtifactMultiplier,
   getRecipeById,
   getRecipeTagMultiplier,
-  makeEnemyId,
   moveToward,
   pickRewardChoices,
   roundPool,
 } from "./utils";
 import { beginBossEncounter, getActiveBoss, getBossDamageProfile, handleBossDefeat, spawnBoss, tickBossEncounter } from "./bossManager";
 
+const CANNON_CHARGE_TIME = 1.4;
+const CANNON_RANGE = 300;
+const IMPACT_LIFETIME = 0.4;
+
 interface DamageSource {
-  kind: "module" | "bot";
+  kind: "module" | "bot" | "fighter";
   attackerBot?: BotInstance;
+  attackerFighter?: FighterInstance;
 }
 
 function getCargoCoreCount(slots: ShipSlot[]): number {
@@ -62,6 +73,19 @@ function damageShip(state: RunState, amount: number): void {
   state.simulation.cycleStats.lost.hullDamage += hullDamage;
 }
 
+// Missiles punch through half of the shield, so pure shield stacking cannot fully ignore a ship duel.
+function damageShipWithMissile(state: RunState, amount: number): void {
+  const absorbed = Math.min(state.ship.shield, amount * 0.5);
+  state.ship.shield -= absorbed;
+  const hullDamage = amount - absorbed;
+  state.ship.hull = Math.max(0, state.ship.hull - hullDamage);
+  state.simulation.cycleStats.lost.hullDamage += hullDamage;
+}
+
+function addImpact(state: RunState, x: number, y: number, size: number, color: number): void {
+  state.simulation.impacts.push({ x, y, age: 0, size, color });
+}
+
 function healShip(state: RunState, amount: number): void {
   if (state.ship.shield < state.ship.maxShield) {
     state.ship.shield = Math.min(state.ship.maxShield, state.ship.shield + amount * 1.4);
@@ -74,6 +98,7 @@ function removeDeadBots(state: RunState): void {
   const before = state.ship.bots.length;
   state.ship.bots = state.ship.bots.filter((bot) => bot.hp > 0);
   state.simulation.cycleStats.lost.botsDestroyed += before - state.ship.bots.length;
+  state.simulation.fighters = state.simulation.fighters.filter((fighter) => fighter.hp > 0);
 }
 
 function offerReward(state: RunState, source: RewardSource): boolean {
@@ -101,6 +126,18 @@ function destroyEnemy(state: RunState, enemy: EnemyInstance): boolean {
   const scrapGain = enemy.scrapReward * salvageMultiplier;
   grantResources(state, "scrap", scrapGain);
 
+  addImpact(state, enemy.x, enemy.y, isCapitalShip(enemy) ? 70 : 22, enemy.color);
+
+  if (enemy.kind === "warship" && !state.simulation.warshipDefeated) {
+    state.simulation.warshipDefeated = true;
+    const bounty = 14 + state.cycle * 3;
+    grantResources(state, "minerals", bounty);
+    state.simulation.duration = Math.min(state.simulation.duration, state.simulation.elapsed + 4);
+    state.simulation.pendingSpawns = [];
+    addMessage(state, `${enemy.name} breaks apart. +${bounty} minerals salvaged. Jumping out in 4s.`);
+    return true;
+  }
+
   if (enemy.kind === "boss" && !state.simulation.bossDefeated) {
     state.simulation.bossDefeated = true;
     return handleBossDefeat(state, enemy);
@@ -121,24 +158,30 @@ function destroyEnemy(state: RunState, enemy: EnemyInstance): boolean {
 }
 
 function damageEnemy(state: RunState, enemy: EnemyInstance, amount: number, source: DamageSource): boolean {
+  if (enemy.hp <= 0) {
+    return false;
+  }
   let damage = amount;
   if (enemy.kind === "boss") {
     const profile = getBossDamageProfile(enemy, source.attackerBot);
     damage *= profile.multiplier;
 
     if (profile.reflectRatio > 0) {
+      const reflected = damage * profile.reflectRatio;
       if (source.attackerBot) {
-        source.attackerBot.hp = Math.max(0, source.attackerBot.hp - damage * profile.reflectRatio);
+        source.attackerBot.hp = Math.max(0, source.attackerBot.hp - reflected);
+      } else if (source.attackerFighter) {
+        source.attackerFighter.hp = Math.max(0, source.attackerFighter.hp - reflected);
       } else {
-        damageShip(state, damage * profile.reflectRatio * 0.55);
+        damageShip(state, reflected * 0.55);
       }
     }
+  }
 
-    if ((enemy.bossShield ?? 0) > 0) {
-      const absorbed = Math.min(enemy.bossShield ?? 0, damage);
-      enemy.bossShield = Math.max(0, (enemy.bossShield ?? 0) - absorbed);
-      damage -= absorbed;
-    }
+  if ((enemy.shield ?? 0) > 0) {
+    const absorbed = Math.min(enemy.shield ?? 0, damage);
+    enemy.shield = Math.max(0, (enemy.shield ?? 0) - absorbed);
+    damage -= absorbed;
   }
 
   enemy.hp -= damage;
@@ -158,25 +201,75 @@ function spawnWave(state: RunState, wave: ThreatWave): void {
     return;
   }
 
-  const definition = ENEMY_DEFINITIONS[wave.kind];
+  if (wave.kind === "warship") {
+    state.simulation.enemies.push(spawnWarship(state.cycle, wave.warshipId));
+    addMessage(state, `${wave.label} is powering weapons.`);
+    return;
+  }
+
+  const spacing = wave.spacing ?? 0.6;
   for (let index = 0; index < wave.count; index += 1) {
-    state.simulation.enemies.push({
-      id: makeEnemyId(),
-      kind: definition.kind,
-      name: definition.name,
-      color: definition.color,
-      hp: definition.hp + (wave.kind === "scavenger" ? state.cycle * 3 : state.cycle * 18),
-      maxHp: definition.hp + (wave.kind === "scavenger" ? state.cycle * 3 : state.cycle * 18),
-      x: ENEMY_SPAWN_POINT.x + index * 18,
-      y: 170 + ((index * 54 + state.cycle * 20) % 300),
-      speed: definition.speed,
-      attack: definition.attack + state.cycle,
-      range: definition.range,
-      scrapReward: definition.scrapReward + (wave.kind === "mini_boss" ? state.cycle * 4 : state.cycle),
-      cooldown: 0,
+    state.simulation.pendingSpawns.push({
+      time: state.simulation.elapsed + index * spacing,
+      kind: wave.kind,
+      lane: wave.kind === "mini_boss" ? 1 : (index + state.simulation.threatCursor) % LANE_YS.length,
     });
   }
-  addMessage(state, `${wave.label} entering the screen.`);
+  addMessage(state, `${wave.label} entering the lanes.`);
+}
+
+function spawnPendingEnemies(state: RunState): void {
+  const due = state.simulation.pendingSpawns.filter((spawn) => spawn.time <= state.simulation.elapsed);
+  if (due.length === 0) {
+    return;
+  }
+  state.simulation.pendingSpawns = state.simulation.pendingSpawns.filter((spawn) => spawn.time > state.simulation.elapsed);
+  for (const spawn of due) {
+    const jitter = ((spawn.time * 37) % 1) * 28 - 14;
+    state.simulation.enemies.push(createLaneEnemy(spawn.kind, state.cycle, ENEMY_SPAWN_POINT.x + 30, LANE_YS[spawn.lane] + jitter));
+  }
+}
+
+function pickCannonTarget(state: RunState): EnemyInstance | undefined {
+  const inRange = state.simulation.enemies
+    .filter((enemy) => enemy.hp > 0 && distance(enemy, SHIP_CENTER) < CANNON_RANGE)
+    .sort((left, right) => distance(left, SHIP_CENTER) - distance(right, SHIP_CENTER))[0];
+  return inRange ?? getCapitalShip(state);
+}
+
+function firePlayerBolt(state: RunState, slot: ShipSlot, target: EnemyInstance, damage: number): void {
+  state.simulation.projectiles.push({
+    id: `bolt_${slot.id}_${state.simulation.elapsed.toFixed(2)}`,
+    owner: "player",
+    kind: "bolt",
+    x: slot.x,
+    y: slot.y,
+    targetId: target.id,
+    targetX: target.x,
+    targetY: target.y,
+    speed: 520,
+    damage,
+    color: 0xffc38a,
+  });
+}
+
+function tickLaunchPort(state: RunState, slot: ShipSlot, dt: number): void {
+  if (state.ship.upgrades.hangar_tech < 1) {
+    return;
+  }
+  const timers = state.simulation.moduleTimers;
+  const remaining = (timers[slot.id] ?? PORT_FIRST_LAUNCH_DELAY) - dt;
+  timers[slot.id] = Math.max(0, remaining);
+  if (remaining > 0) {
+    return;
+  }
+  const loadout = getPortLoadout(state, slot);
+  const wingSize = state.simulation.fighters.filter((fighter) => fighter.portSlotId === slot.id).length;
+  if (wingSize >= loadout.capacity) {
+    return;
+  }
+  state.simulation.fighters.push(createFighter(state, slot, loadout));
+  timers[slot.id] = loadout.interval;
 }
 
 function applyPassiveModules(state: RunState, dt: number): void {
@@ -213,16 +306,21 @@ function applyPassiveModules(state: RunState, dt: number): void {
         break;
       }
       case "pulse_cannon": {
-        const target = state.simulation.enemies
-          .filter((enemy) => distance(enemy, SHIP_CENTER) < 240)
-          .sort((left, right) => distance(left, SHIP_CENTER) - distance(right, SHIP_CENTER))[0];
+        const charge = Math.min(CANNON_CHARGE_TIME, (state.simulation.moduleTimers[slot.id] ?? 0) + dt);
+        state.simulation.moduleTimers[slot.id] = charge;
+        const target = charge >= CANNON_CHARGE_TIME ? pickCannonTarget(state) : undefined;
         if (!target) {
           break;
         }
-        const damage = 5.2 * dt * attackArtifact * (1 + state.ship.upgrades.defense_grid * 0.14) * (1 + cargoAdj * 0.05);
-        damageEnemy(state, target, damage, { kind: "module" });
+        state.simulation.moduleTimers[slot.id] = 0;
+        const damage =
+          5.2 * CANNON_CHARGE_TIME * attackArtifact * (1 + state.ship.upgrades.defense_grid * 0.14) * (1 + cargoAdj * 0.05);
+        firePlayerBolt(state, slot, target, damage);
         break;
       }
+      case "launch_port":
+        tickLaunchPort(state, slot, dt);
+        break;
       case "repair_node": {
         const heal = 2.4 * dt * supportArtifact * (1 + state.ship.upgrades.support_bay * 0.16);
         const damagedBot = state.ship.bots
@@ -265,6 +363,7 @@ function chooseEnemyTarget(state: RunState, bot: BotInstance): EnemyInstance | u
 }
 
 function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
+  bot.targetId = undefined;
   const doctrine = DOCTRINES[state.doctrine];
   const multipliers = getBotMultipliers(state, bot);
   const enemiesNearShip = state.simulation.enemies.filter((enemy) => distance(enemy, SHIP_CENTER) < 180).length;
@@ -344,16 +443,106 @@ function applyBotBehavior(state: RunState, bot: BotInstance, dt: number): void {
   moveToward(bot, target, bot.speed * (0.9 + state.commitmentBonus * 0.35), dt);
   if (distance(bot, target) <= bot.range) {
     const damage = bot.attack * multipliers.attack * dt;
+    bot.targetId = target.id;
     damageEnemy(state, target, damage, { kind: "bot", attackerBot: bot });
     bot.contribution.damage += damage;
   }
 }
 
+function applyFighterBehavior(state: RunState, fighter: FighterInstance, dt: number): void {
+  const startX = fighter.x;
+  const startY = fighter.y;
+  fighter.targetId = undefined;
+  const moonActive = state.simulation.objective.integrity > 0;
+  const shipDamaged = state.ship.hull < state.ship.maxHull || state.ship.shield < state.ship.maxShield;
+  const woundedBot = state.ship.bots
+    .filter((bot) => bot.hp < bot.maxHp)
+    .sort((left, right) => left.hp / left.maxHp - right.hp / right.maxHp)[0];
+
+  if (fighter.kind === "skiff" && moonActive) {
+    const berth = { x: OBJECTIVE_POINT.x + Math.cos(fighter.orbit) * 40, y: OBJECTIVE_POINT.y + Math.sin(fighter.orbit) * 40 };
+    moveToward(fighter, berth, fighter.speed, dt);
+    if (distance(fighter, OBJECTIVE_POINT) <= 64) {
+      const mined = fighter.mining * dt * getGlobalArtifactMultiplier(state, "miningMultiplier");
+      state.simulation.objective.integrity = Math.max(0, state.simulation.objective.integrity - mined);
+      grantResources(state, "minerals", mined * 1.2);
+    }
+  } else if (fighter.kind === "tender" && (woundedBot || shipDamaged)) {
+    const patient = woundedBot ?? SHIP_CENTER;
+    moveToward(fighter, patient, fighter.speed, dt);
+    if (distance(fighter, patient) <= (woundedBot ? fighter.range : 90)) {
+      const heal = fighter.support * dt * getGlobalArtifactMultiplier(state, "supportMultiplier");
+      if (woundedBot) {
+        woundedBot.hp = Math.min(woundedBot.maxHp, woundedBot.hp + heal);
+      } else {
+        healShip(state, heal);
+      }
+    }
+  } else {
+    const nearShip = state.simulation.enemies
+      .filter((enemy) => enemy.hp > 0 && distance(enemy, SHIP_CENTER) < CANNON_RANGE)
+      .sort((left, right) => distance(left, fighter) - distance(right, fighter))[0];
+    // Swarm wings screen the ship like towers; only duels and boss fights send them out on strike runs.
+    const strikeTarget =
+      state.simulation.encounter === "swarm"
+        ? undefined
+        : state.simulation.enemies
+            .filter((enemy) => enemy.hp > 0)
+            .sort((left, right) => distance(left, fighter) - distance(right, fighter))[0];
+    const target = nearShip ?? strikeTarget;
+    if (target) {
+      if (distance(fighter, target) > fighter.range * 0.7) {
+        moveToward(fighter, target, fighter.speed, dt);
+      }
+      if (distance(fighter, target) <= fighter.range) {
+        fighter.targetId = target.id;
+        damageEnemy(state, target, fighter.attack * dt, { kind: "fighter", attackerFighter: fighter });
+      }
+    } else {
+      fighter.orbit += dt * 0.7;
+      moveToward(
+        fighter,
+        { x: SHIP_CENTER.x + Math.cos(fighter.orbit) * 195, y: SHIP_CENTER.y + Math.sin(fighter.orbit) * 195 },
+        fighter.speed,
+        dt,
+      );
+    }
+  }
+
+  if (Math.hypot(fighter.x - startX, fighter.y - startY) > 0.01) {
+    fighter.heading = Math.atan2(fighter.y - startY, fighter.x - startX);
+  }
+}
+
 function applyEnemyBehavior(state: RunState, dt: number): void {
-  for (const enemy of state.simulation.enemies) {
+  const fighters = state.simulation.fighters;
+  for (const enemy of [...state.simulation.enemies]) {
+    if (enemy.hp <= 0) {
+      continue;
+    }
+
+    if (isCapitalShip(enemy)) {
+      for (const event of tickCapitalShip(state, enemy, dt, [...state.ship.bots, ...fighters])) {
+        addMessage(state, event);
+      }
+      continue;
+    }
+
     const targetBot = state.ship.bots
       .filter((bot) => distance(bot, enemy) < 120)
       .sort((left, right) => distance(left, enemy) - distance(right, enemy))[0];
+    const targetFighter = fighters
+      .filter((fighter) => fighter.hp > 0 && distance(fighter, enemy) < 120)
+      .sort((left, right) => distance(left, enemy) - distance(right, enemy))[0];
+    const engageFighter = targetFighter && (!targetBot || distance(targetFighter, enemy) < distance(targetBot, enemy));
+
+    if (engageFighter) {
+      moveToward(enemy, targetFighter, enemy.speed, dt);
+      if (distance(enemy, targetFighter) <= enemy.range) {
+        targetFighter.hp = Math.max(0, targetFighter.hp - enemy.attack * dt);
+      }
+      continue;
+    }
 
     if (targetBot) {
       moveToward(enemy, targetBot, enemy.speed, dt);
@@ -365,11 +554,52 @@ function applyEnemyBehavior(state: RunState, dt: number): void {
       continue;
     }
 
-    moveToward(enemy, SHIP_CENTER, enemy.speed, dt);
+    moveToward(enemy, getLaneWaypoint(enemy), enemy.speed, dt);
     if (distance(enemy, SHIP_CENTER) <= enemy.range) {
       damageShip(state, enemy.attack * dt);
     }
   }
+}
+
+function stepProjectiles(state: RunState, dt: number): boolean {
+  let majorUpdate = false;
+  const inFlight = [];
+  for (const projectile of state.simulation.projectiles) {
+    const target =
+      projectile.owner === "player"
+        ? state.simulation.enemies.find((enemy) => enemy.id === projectile.targetId && enemy.hp > 0)
+        : undefined;
+    if (target) {
+      projectile.targetX = target.x;
+      projectile.targetY = target.y;
+    }
+    const aim = { x: projectile.targetX, y: projectile.targetY };
+    if (distance(projectile, aim) > projectile.speed * dt) {
+      moveToward(projectile, aim, projectile.speed, dt);
+      inFlight.push(projectile);
+      continue;
+    }
+
+    addImpact(state, aim.x, aim.y, projectile.kind === "missile" ? 26 : 14, projectile.color);
+    if (projectile.owner === "player") {
+      if (target) {
+        majorUpdate = damageEnemy(state, target, projectile.damage, { kind: "module" }) || majorUpdate;
+      }
+    } else if (projectile.kind === "missile") {
+      damageShipWithMissile(state, projectile.damage);
+    } else {
+      damageShip(state, projectile.damage);
+    }
+  }
+  state.simulation.projectiles = inFlight;
+  return majorUpdate;
+}
+
+function ageImpacts(state: RunState, dt: number): void {
+  for (const impact of state.simulation.impacts) {
+    impact.age += dt;
+  }
+  state.simulation.impacts = state.simulation.impacts.filter((impact) => impact.age < IMPACT_LIFETIME);
 }
 
 function cleanDeadEnemies(state: RunState): boolean {
@@ -386,6 +616,18 @@ function maybeTriggerObjectiveReward(state: RunState): boolean {
     return offerReward(state, "moon");
   }
   return false;
+}
+
+function getDebriefText(state: RunState): string {
+  if (state.simulation.encounter === "duel") {
+    return state.simulation.warshipDefeated
+      ? "You out-traded the warship and stripped its wreck. Review what the duel cost and what to try next."
+      : "The warship slipped away before it broke. More firepower or a bigger wing would finish it next time.";
+  }
+  if (state.simulation.encounter === "boss") {
+    return "The ship weathered a boss engagement. Review what held and what nearly gave way.";
+  }
+  return "Your ship held the lanes. Review what the mission earned, what the doctrine bought you, and what to try next.";
 }
 
 function finalizeCycle(state: RunState): void {
@@ -413,12 +655,13 @@ function finalizeCycle(state: RunState): void {
   }
 
   state.meta.totalCyclesCompleted += 1;
+  const survived = state.ship.hull > 0;
+  if (survived && state.simulation.encounter === "duel" && !state.simulation.warshipDefeated) {
+    addMessage(state, "The warship disengaged before it broke.");
+  }
   state.summary = {
-    title: state.ship.hull > 0 ? `Mission ${state.cycle} complete` : "The plan failed",
-    text:
-      state.ship.hull > 0
-        ? "Your ship held together. Review what the mission earned, what the doctrine bought you, and what to try next."
-        : "Hull collapse ended the run. The debrief below should still tell you what almost worked.",
+    title: survived ? `Mission ${state.cycle} complete – ${state.simulation.encounterName}` : "The plan failed",
+    text: survived ? getDebriefText(state) : "Hull collapse ended the run. The debrief below should still tell you what almost worked.",
     gains: roundPool(state.simulation.cycleStats.gained),
     losses: state.simulation.cycleStats.lost,
     discoveries: [...state.simulation.cycleStats.discoveries],
@@ -446,6 +689,8 @@ export function stepSimulation(state: RunState, dt: number): boolean {
     state.simulation.threatCursor += 1;
     majorUpdate = true;
   }
+  spawnPendingEnemies(state);
+  ageImpacts(state, dt);
 
   tickBossEncounter(state, dt);
   if (state.simulation.bossEncounter.introTimer > 0) {
@@ -456,7 +701,13 @@ export function stepSimulation(state: RunState, dt: number): boolean {
   for (const bot of state.ship.bots) {
     applyBotBehavior(state, bot, dt);
   }
+  for (const fighter of state.simulation.fighters) {
+    applyFighterBehavior(state, fighter, dt);
+  }
   applyEnemyBehavior(state, dt);
+  if (stepProjectiles(state, dt)) {
+    majorUpdate = true;
+  }
   removeDeadBots(state);
   if (cleanDeadEnemies(state)) {
     majorUpdate = true;

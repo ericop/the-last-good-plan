@@ -10,6 +10,10 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     speed: 11,
     attack: 24,
     range: 132,
+    weapons: [
+      { name: "Tyrant Lance", kind: "laser", chargeTime: 4.5, shots: 2, damage: 8 },
+      { name: "Signal Torpedo", kind: "missile", chargeTime: 10, shots: 1, damage: 14 },
+    ],
     behaviors: [
       { kind: "periodic_shield", interval: 9, amount: 42 },
       { kind: "charging_attack", interval: 12, chargeTime: 1.35, damage: 26 },
@@ -26,6 +30,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     speed: 9,
     attack: 28,
     range: 124,
+    weapons: [{ name: "Foundry Battery", kind: "laser", chargeTime: 5, shots: 3, damage: 6 }],
     behaviors: [
       { kind: "spawning_minions", interval: 10, count: 2 },
       { kind: "directional_sweep", interval: 13, damage: 18, width: 180 },
@@ -42,6 +47,10 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     speed: 10,
     attack: 30,
     range: 138,
+    weapons: [
+      { name: "Null Beam", kind: "laser", chargeTime: 4, shots: 2, damage: 7 },
+      { name: "Shepherd Missile", kind: "missile", chargeTime: 9, shots: 1, damage: 12 },
+    ],
     behaviors: [
       { kind: "periodic_shield", interval: 8, amount: 34 },
       { kind: "charging_attack", interval: 14, chargeTime: 1.15, damage: 30 },

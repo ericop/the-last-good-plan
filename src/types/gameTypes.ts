@@ -6,16 +6,21 @@ export type ModuleId =
   | "shield_emitter"
   | "pulse_cannon"
   | "cargo_core"
-  | "repair_node";
+  | "repair_node"
+  | "launch_port";
+export type MergeableModuleId = Exclude<ModuleId, "launch_port">;
 export type EpicModuleId = "dawn_prism" | "war_forge" | "sainted_patch";
 export type FabricationOptionId = ModuleId | EpicModuleId;
-export type UpgradeId = "mining_array" | "defense_grid" | "support_bay";
+export type UpgradeId = "mining_array" | "defense_grid" | "support_bay" | "hangar_tech";
 export type Phase = "menu" | "planning" | "execution" | "results" | "run_over";
 export type DiscoveryState = "unknown" | "discovered" | "known_mastered_lite";
 export type BotRole = "mining" | "defense" | "support" | "hybrid";
 export type ArtifactType = "passive" | "doctrine" | "merge_support";
 export type RewardSource = "moon" | "boss_chest" | "boss";
-export type EnemyKind = "scavenger" | "mini_boss" | "boss";
+export type EnemyKind = "scavenger" | "dart" | "brute" | "mini_boss" | "warship" | "boss";
+export type EncounterKind = "swarm" | "duel" | "boss";
+export type FighterKind = "interceptor" | "skiff" | "tender";
+export type ProjectileKind = "bolt" | "laser" | "missile";
 export type DockPanelId = "ship" | "build" | "bots" | "doctrine" | "log";
 export type BossBehavior =
   | { kind: "periodic_shield"; interval: number; amount: number }
@@ -109,6 +114,27 @@ export interface EpicModuleDefinition {
   applyToBot: (bot: BotInstance) => void;
 }
 
+export interface ShipWeaponDefinition {
+  name: string;
+  kind: "laser" | "missile";
+  chargeTime: number;
+  shots: number;
+  damage: number;
+}
+
+export interface WarshipDefinition {
+  id: string;
+  name: string;
+  color: number;
+  hull: number;
+  shield: number;
+  shieldRegen: number;
+  pointDefense: number;
+  pointDefenseRange: number;
+  weapons: ShipWeaponDefinition[];
+  launch?: { interval: number; count: number };
+}
+
 export interface BossDefinition {
   id: string;
   name: string;
@@ -118,6 +144,7 @@ export interface BossDefinition {
   speed: number;
   attack: number;
   range: number;
+  weapons: ShipWeaponDefinition[];
   behaviors: BossBehavior[];
   modifiers: BossModifier[];
   reward: EpicModuleId;
@@ -133,7 +160,7 @@ export interface BotStatsTemplate {
   salvage: number;
 }
 
-export type MergeModules = [ModuleId, ModuleId] | [ModuleId, ModuleId, ModuleId];
+export type MergeModules = [MergeableModuleId, MergeableModuleId] | [MergeableModuleId, MergeableModuleId, MergeableModuleId];
 
 export interface MergeRecipe {
   id: string;
@@ -179,6 +206,7 @@ export interface BotInstance {
   salvage: number;
   epicModules: EpicModuleId[];
   cooldown: number;
+  targetId?: string;
   contribution: {
     mined: number;
     damage: number;
@@ -212,10 +240,19 @@ export interface EnemyInstance {
   range: number;
   scrapReward: number;
   cooldown: number;
+  shield?: number;
+  maxShield?: number;
+  shieldRegen?: number;
+  holdX?: number;
+  weapons?: ShipWeaponState[];
+  launch?: { interval: number; count: number; timer: number };
   bossId?: string;
-  bossShield?: number;
-  maxBossShield?: number;
+  warshipId?: string;
   bossBehaviorTimers?: Record<string, number>;
+}
+
+export interface ShipWeaponState extends ShipWeaponDefinition {
+  charge: number;
 }
 
 export interface ThreatWave {
@@ -223,7 +260,56 @@ export interface ThreatWave {
   label: string;
   kind: EnemyKind;
   count: number;
+  spacing?: number;
   bossId?: string;
+  warshipId?: string;
+}
+
+export interface PendingSpawn {
+  time: number;
+  kind: EnemyKind;
+  lane: number;
+}
+
+export interface Projectile {
+  id: string;
+  owner: "player" | "enemy";
+  kind: ProjectileKind;
+  x: number;
+  y: number;
+  targetId?: string;
+  targetX: number;
+  targetY: number;
+  speed: number;
+  damage: number;
+  color: number;
+}
+
+export interface FighterInstance {
+  id: string;
+  portSlotId: string;
+  kind: FighterKind;
+  color: number;
+  x: number;
+  y: number;
+  heading: number;
+  orbit: number;
+  hp: number;
+  maxHp: number;
+  speed: number;
+  attack: number;
+  range: number;
+  mining: number;
+  support: number;
+  targetId?: string;
+}
+
+export interface ImpactEffect {
+  x: number;
+  y: number;
+  age: number;
+  size: number;
+  color: number;
 }
 
 export interface ObjectiveState {
@@ -307,9 +393,17 @@ export interface CycleStats {
 export interface SimulationState {
   elapsed: number;
   duration: number;
+  encounter: EncounterKind;
+  encounterName: string;
   upcomingThreats: ThreatWave[];
   threatCursor: number;
+  pendingSpawns: PendingSpawn[];
   enemies: EnemyInstance[];
+  projectiles: Projectile[];
+  fighters: FighterInstance[];
+  impacts: ImpactEffect[];
+  moduleTimers: Record<string, number>;
+  warshipDefeated: boolean;
   objective: ObjectiveState;
   bossDefeated: boolean;
   moonRewardTriggered: boolean;

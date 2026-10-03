@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createRunState } from "./createRunState";
-import { handleBossDefeat, isBossCycle, spawnBoss, createCycleThreatSchedule } from "./bossManager";
+import { handleBossDefeat, isBossCycle, spawnBoss } from "./bossManager";
+import { createCycleThreatSchedule } from "./encounters";
 import { createDefaultDiscoveryLog } from "./discovery";
 import { processCommand } from "./processCommand";
 import type { SaveData } from "../types/gameTypes";
