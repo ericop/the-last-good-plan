@@ -12,6 +12,22 @@ The MVP separates simulation from presentation.
 
 The key future-proofing choice is that UI and scene input never mutate gameplay state directly. They always dispatch commands.
 
+## Encounters
+
+- `src/core/encounters.ts` maps each cycle to an encounter (`swarm`, `duel`, or `boss`), builds its threat schedule, and
+  sets its duration. Swarm waves trickle into `simulation.pendingSpawns` and then walk `LANE_YS` toward the ship.
+- Warships and bosses are "capital ships": any enemy with `holdX`. `tickCapitalShip` parks them, charges their weapons,
+  regenerates shields, launches escorts, and runs point defense. Their volleys become `simulation.projectiles`.
+- Destroying a duel's warship ends the mission 4 seconds later. If the timer runs out first, it disengages.
+- To add a warship, append to `src/data/warships.ts`. The duel rotation cycles through that list.
+
+## Carrier Launch Ports
+
+- `launch_port` is a module, but it is excluded from merges via `MergeableModuleId`.
+- Building one requires `hangar_tech` level 1. `src/core/hangar.ts` derives each port's wing (kind, size, launch
+  interval, stats) from the Hangar Tech level and the port's adjacent modules.
+- Fighters live in `simulation.fighters`, are rebuilt every mission, and never count against bot capacity.
+
 ## Adding Modules
 
 1. Add the new module definition to `src/data/modules.ts`.

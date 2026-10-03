@@ -28,9 +28,16 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
 - 3x3 ship board with adjacency-aware merges
 - Six base modules and ten merge outcomes
 - Discovery log with unknown, discovered, and known/mastered-lite states
-- Predictable wave schedule with a mini-boss
+- Three encounter types that rotate by mission:
+  - Swarm Defense: tower-defense style streams of darts, scavengers, and brutes marching down three lanes, ending in a mini-boss
+  - Ship Duel (every 3rd mission): an FTL-style warship parks across the field and trades charged laser and missile volleys with your ship
+  - Boss (every 10th mission): a boss capital ship with its own weapons, shields, and special behaviors
+- Pulse Cannons fire visible bolts; enemy lasers hit shields first and missiles punch through half of them
+- Carrier play: research Hangar Tech to build Launch Ports that launch a fighter wing on their own during battle
+  - Ports next to a Mineral Drill build mining skiffs, next to a Repair Node build tenders, otherwise interceptors
+  - Adjacent Pulse Cannons, Shield Emitters, and Solar Collectors boost wing firepower, hull, and launch speed
 - Moon objective that reveals artifact rewards when fully mined
-- Three upgrade nodes
+- Four upgrade nodes, including Hangar Tech
 - LocalStorage persistence for discovery and meta knowledge
 - Instant pause with `Space` or the pause button
 
