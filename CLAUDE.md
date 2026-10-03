@@ -44,8 +44,8 @@ direction. The chosen direction is **Hybrid Bridge** (variant C): one sim, a por
 - **Module:** `ModuleId` in `src/types/gameTypes.ts`, `MODULE_DEFINITIONS`, and if mergeable `MODULE_ORDER`,
   `MODULE_TRAITS`, and `countModules` in `src/data/merges.ts`; `moduleCounts` in `tutorial.ts`; `TRAY_LABELS` in
   `uiManager.ts`. The recipe count in `mergeSystem.test.ts` is pairs + trios + doubled trios (98 for 7 modules).
-- **Warship:** append to `src/data/warships.ts`. **Route:** `ROUTES` and `getRouteOptions` in
-  `src/core/encounters.ts`.
+- **Warship:** append to `src/data/warships.ts`. **Route:** `ROUTES` in `src/core/encounters.ts`, plus its weight
+  in `pickRoute` in `src/core/sectorMap.ts` so it appears on the map.
 
 ## Testing
 

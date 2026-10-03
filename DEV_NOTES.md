@@ -37,8 +37,13 @@ The key future-proofing choice is that UI and scene input never mutate gameplay 
 
 ## Sector Map, Chests, and Debrief
 
-- `state.routeOptions` is rolled in `resetForNextCycle` from `getRouteOptions`; `choose_route` rebuilds the planning
-  simulation for that route via `selectRoute`. Route rules (encounter, blurb, tip) live in `ROUTES` in `encounters.ts`.
+- `src/core/sectorMap.ts` generates each 10-jump sector from the run seed (`state.sector.seed`): columns of 2-3 nodes
+  that link forward without crossing, ending in one boss node. Column 10 lines up with `isBossCycle`.
+- `getReachableNodes` returns the nodes linked from the last node in `state.sector.path`. `choose_node` only accepts
+  those, then rebuilds the planning simulation for the node's route via `selectRoute`. `prepareExecutionState`
+  appends the selected node to the path, and `resetForNextCycle` generates the next sector after the boss.
+- Route rules (encounter, blurb, tip) live in `ROUTES` in `encounters.ts`; how often each route appears on the map is
+  `pickRoute` in `sectorMap.ts`.
 - Rewards found mid-mission are pushed to `simulation.chests` instead of pausing. `open_chest` moves one into
   `pendingReward` during the debrief, and `continue_from_results` refuses to advance until the queue is empty.
 - `finalizeCycle` scores `summary.stars` and `summary.mvp` (fallen bots are eligible).
