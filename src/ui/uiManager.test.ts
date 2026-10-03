@@ -34,8 +34,17 @@ function mount(tutorialCompleted = true) {
   return { root, controller, click };
 }
 
+function clearDialog(controller: GameController): void {
+  for (let guard = 0; controller.getState().story.dialog && guard < 50; guard += 1) {
+    const dialog = controller.getState().story.dialog!;
+    const atChoice = dialog.index >= dialog.lines.length - 1 && dialog.options;
+    controller.dispatch(atChoice ? { type: "choose_dialog", optionIndex: 0 } : { type: "advance_dialog" });
+  }
+}
+
 function startPlanning(controller: GameController): void {
   controller.dispatch({ type: "start_new_run" });
+  clearDialog(controller);
   const state = controller.getState();
   state.resources = { solar: 999, minerals: 999, scrap: 999 };
 }
@@ -221,10 +230,79 @@ describe("UI renders every phase without breaking", () => {
 
   it("shows the tutorial bubble and points the ghost hand at the next control", () => {
     const { root, controller } = mount(false);
+    clearDialog(controller);
     expect(root.querySelector(".tutorial-bubble")?.textContent).toContain("Build a calm plan");
     controller.dispatch({ type: "advance_tutorial" });
     expect(root.querySelector(".ghost-hand")?.classList.contains("visible")).toBe(true);
     expect(root.querySelector(".tutorial-bubble p")!.textContent!.split(/\s+/).length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe("story UI", () => {
+  beforeEach(() => {
+    setViewport(1440, 900);
+  });
+
+  it("locks Uncharted on the menu until the campaign is beaten, then starts it from a seed", () => {
+    const { root, controller, click } = mount();
+    expect(root.querySelector(".uncharted-locked")).not.toBeNull();
+    expect(root.querySelector("#seed-input")).toBeNull();
+
+    controller.getState().campaign.roguelikeUnlocked = true;
+    controller.dispatch({ type: "set_dock_panel", panelId: "ship" });
+    const input = root.querySelector<HTMLInputElement>("#seed-input")!;
+    input.value = "abc123";
+    click("[data-action='start-roguelike']");
+    expect(controller.getState().mode).toBe("roguelike");
+    expect(root.querySelector(".resource-pill.seed")?.textContent).toContain("ABC123");
+  });
+
+  it("plays the intro dialog with click-through lines and choice buttons", () => {
+    const { root, controller, click } = mount();
+    click("[data-action='start-campaign'][data-fresh='true']");
+    expect(root.querySelector(".dialog-card .dialog-speaker")?.textContent).toBe("Governor Brightwater");
+    for (let guard = 0; guard < 20 && root.querySelector("[data-action='advance-dialog']"); guard += 1) {
+      click("[data-action='advance-dialog']");
+    }
+    expect(root.querySelectorAll("[data-action='choose-dialog']").length).toBeGreaterThan(1);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "2" }));
+    expect(controller.getState().story.choiceTag).toBe("noodle");
+    expect(root.querySelector(".dialog-card .dialog-text")?.textContent).toContain("snack drawer");
+  });
+
+  it("shows comms and the escort bar during an escort level, and offers a retry on failure", () => {
+    const { root, controller, click } = mount();
+    click("[data-action='start-campaign'][data-fresh='true']");
+    clearDialog(controller);
+    const state = controller.getState();
+    state.cycle = 3;
+    state.sector.path = ["campaign-1", "campaign-2"];
+    controller.dispatch({ type: "choose_node", nodeId: "campaign-3" });
+    controller.dispatch({ type: "select_fabrication_module", moduleId: "pulse_cannon" });
+    controller.dispatch({ type: "board_slot_pressed", slotId: "slot_1_1" });
+    controller.dispatch({ type: "begin_execution" });
+    const running = controller.getState();
+    running.simulation.launchCountdown = 0;
+    running.simulation.activeComm = { line: { speaker: "rook", text: "Close. Got it." }, timer: 3 };
+    controller.dispatch({ type: "toggle_execution_speed" });
+    expect(root.querySelector(".comm-panel")?.textContent).toContain("Close. Got it.");
+    expect(root.querySelector(".stat-bar.escort")?.textContent).toContain("Rook");
+
+    running.phase = "run_over";
+    running.summary = {
+      title: "Escort lost",
+      text: "",
+      gains: { solar: 0, minerals: 0, scrap: 0 },
+      losses: { botsDestroyed: 0, hullDamage: 0 },
+      discoveries: [],
+      rewards: [],
+      perfectCommitmentReward: { solar: 0, minerals: 0, scrap: 0 },
+      stars: [],
+    };
+    controller.dispatch({ type: "toggle_execution_speed" });
+    expect(root.querySelector(".debrief h2")?.textContent).toBe("Escort lost");
+    click("[data-action='retry-level']");
+    expect(controller.getState().phase).toBe("planning");
   });
 });
 

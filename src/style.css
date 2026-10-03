@@ -2841,3 +2841,213 @@ kbd,
   font-size: 21px;
   justify-content: center;
 }
+
+/* ===== Story ===== */
+.menu-actions {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.menu-actions .mission-button,
+.menu-actions .ui-button {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.uncharted-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.seed-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(134, 193, 214, 0.35);
+  background: rgba(4, 10, 15, 0.9);
+  color: var(--text-main);
+  font: 600 15px system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.seed-input::placeholder {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
+
+.uncharted-locked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px dashed rgba(134, 193, 214, 0.35);
+  color: var(--text-soft);
+  text-align: left;
+  font-size: 14px;
+}
+
+.uncharted-locked .icon {
+  width: 20px;
+  height: 20px;
+  color: var(--text-dim);
+}
+
+.modal-layer:has(.dialog-card) {
+  align-items: flex-end;
+  background: linear-gradient(180deg, rgba(3, 8, 12, 0) 40%, rgba(3, 8, 12, 0.7));
+}
+
+.dialog-card {
+  width: min(720px, calc(100vw - 24px));
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 4vh;
+  border: 2px solid color-mix(in srgb, var(--speaker-color) 60%, transparent);
+  animation: card-slide 0.3s ease-out;
+}
+
+.dialog-portrait {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  flex: 0 0 auto;
+  border-radius: 20px;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--speaker-color) 85%, #fff), var(--speaker-color));
+  color: #0b1720;
+  font: 900 22px/1 system-ui, sans-serif;
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.25), 0 0 24px color-mix(in srgb, var(--speaker-color) 45%, transparent);
+}
+
+.dialog-portrait.small {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.dialog-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dialog-speaker {
+  font: 800 14px/1 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--speaker-color);
+}
+
+.dialog-text {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.4;
+  color: var(--text-main);
+  animation: line-in 0.25s ease-out;
+}
+
+@keyframes line-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.dialog-options {
+  display: grid;
+  gap: 8px;
+}
+
+.dialog-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  font-size: 16px;
+  text-align: left;
+}
+
+.dialog-option:hover {
+  border-color: var(--speaker-color);
+}
+
+.dialog-next {
+  justify-self: end;
+  min-height: 44px;
+  padding: 8px 20px;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comm-panel {
+  align-self: start;
+  justify-self: start;
+  margin: 10px;
+  max-width: min(420px, calc(100% - 20px));
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(6, 14, 20, 0.9);
+  border: 1px solid color-mix(in srgb, var(--speaker-color) 55%, transparent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: card-slide 0.25s ease-out;
+}
+
+.comm-panel b {
+  font: 800 13px/1.2 system-ui, sans-serif;
+  color: var(--speaker-color);
+}
+
+.comm-panel p {
+  margin: 2px 0 0;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--text-main);
+}
+
+.stat-bar.escort .stat-bar-fill {
+  background: linear-gradient(90deg, #7a5cff, #c59cff);
+}
+
+.stat-bar.escort {
+  height: 16px;
+}
+
+.stat-bar.escort .stat-bar-label,
+.stat-bar.escort .stat-bar-value {
+  line-height: 16px;
+}
+
+#app[data-layout="pocket"] .dialog-card {
+  gap: 10px;
+  padding: 14px;
+  margin-bottom: 2vh;
+}
+
+#app[data-layout="pocket"] .dialog-portrait {
+  width: 52px;
+  height: 52px;
+  font-size: 18px;
+}
+
+#app[data-layout="pocket"] .dialog-text {
+  font-size: 16px;
+}
+
+#app[data-layout="pocket"] .comm-panel p {
+  font-size: 13px;
+}

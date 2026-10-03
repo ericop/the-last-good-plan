@@ -23,10 +23,19 @@ import type {
   RunState,
   ShipSlot,
 } from "../types/gameTypes";
+import { ALIEN_COLORS } from "../data/story";
 import { haptic, playSound } from "../ui/feedback";
 import { getLayoutMode } from "../ui/layoutMode";
 
 const BARRAGE_RED = 0xff2850;
+const RESCUE_SWEEP_TIME = 2.4;
+const RESCUE_FORMATION = [
+  { y: 150, lag: 0 },
+  { y: 250, lag: 60 },
+  { y: 340, lag: 20 },
+  { y: 430, lag: 80 },
+  { y: 520, lag: 40 },
+];
 const LAUNCH_FLASH_TIME = 0.45;
 const BIG_HIT_HULL = 8;
 const OBSERVER_ZOOM = 1.3;
@@ -49,6 +58,7 @@ interface FeedbackSnapshot {
   fighterIds: Set<string>;
   announcement?: string;
   calloutCount: number;
+  comm?: string;
   launching: boolean;
   bossIntro: boolean;
   hull: number;
@@ -72,6 +82,7 @@ export class RunScene extends Phaser.Scene {
   private slotLabelTexts = new Map<string, Phaser.GameObjects.Text>();
   private slotCodeTexts = new Map<string, Phaser.GameObjects.Text>();
   private calloutTexts: Phaser.GameObjects.Text[] = [];
+  private heroLabel!: Phaser.GameObjects.Text;
   private world!: Phaser.GameObjects.Container;
   private portrait = false;
   private launchFlashes: LaunchFlash[] = [];
@@ -87,6 +98,14 @@ export class RunScene extends Phaser.Scene {
 
   create(): void {
     this.controller = this.registry.get("controller") as GameController;
+    this.slotLabelTexts = new Map();
+    this.slotCodeTexts = new Map();
+    this.calloutTexts = [];
+    this.barrageAlertTexts = [];
+    this.launchFlashes = [];
+    this.feedbackSnapshot = undefined;
+    this.visualSnapshot = undefined;
+    this.boosterTrails.clear();
     this.graphics = this.add.graphics();
     this.boosterGraphics = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
     this.starfield = createStarfield(this, { width: GAME_WIDTH, height: GAME_HEIGHT });
@@ -125,6 +144,11 @@ export class RunScene extends Phaser.Scene {
       this.slotLabelTexts.set(slot.id, labelText);
       this.slotCodeTexts.set(slot.id, codeText);
     }
+
+    this.heroLabel = this.add
+      .text(0, 0, "", { fontFamily: "system-ui, sans-serif", fontSize: "13px", fontStyle: "bold", color: "#ffffff", stroke: "#0b1720", strokeThickness: 3 })
+      .setOrigin(0.5)
+      .setVisible(false);
 
     for (let index = 0; index < 8; index += 1) {
       this.calloutTexts.push(
@@ -176,6 +200,10 @@ export class RunScene extends Phaser.Scene {
     this.starfield.update(dt);
     this.controller.update(dt);
     const state = this.controller.getState();
+    if (state.phase === "menu") {
+      this.scene.start("main-menu");
+      return;
+    }
     const portrait = getLayoutMode() === "pocket";
     if (portrait !== this.portrait) {
       this.applyOrientation(portrait);
@@ -215,6 +243,8 @@ export class RunScene extends Phaser.Scene {
     this.drawImpacts(state);
     this.drawLaunchFlashes();
     this.drawTapMarker(state);
+    this.drawRescue(state);
+    this.drawHeroLabel(state);
     this.boosterGraphics.clear();
     this.boosterTrails.draw(this.boosterGraphics);
     this.assemblyEffects.drawOverlay(this.graphics);
@@ -526,6 +556,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private drawFighter(fighter: FighterInstance): void {
+    if (fighter.hero) {
+      this.drawHero(fighter);
+      return;
+    }
     const cos = Math.cos(fighter.heading);
     const sin = Math.sin(fighter.heading);
     const point = (forward: number, side: number) =>
@@ -568,8 +602,89 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
+  private drawHero(hero: FighterInstance): void {
+    const point = (forward: number, side: number) => new Phaser.Geom.Point(hero.x + forward, hero.y + side);
+    const hull = [point(26, 0), point(8, -12), point(-18, -12), point(-24, -5), point(-24, 5), point(-18, 12), point(8, 12)];
+    this.graphics.fillStyle(0x0b1720, 0.95);
+    this.graphics.fillPoints(hull, true);
+    this.graphics.lineStyle(3, hero.color, 1);
+    this.graphics.strokePoints(hull, true);
+    this.graphics.fillStyle(hero.color, 0.9);
+    this.graphics.fillCircle(hero.x + 6, hero.y, 5);
+    this.graphics.lineStyle(2, hero.color, 0.35 + Math.abs(Math.sin(this.visualTime * 3)) * 0.35);
+    this.graphics.strokeCircle(hero.x, hero.y, 32);
+    const ratio = Math.max(0, hero.hp / hero.maxHp);
+    this.graphics.fillStyle(0x182029, 1);
+    this.graphics.fillRect(hero.x - 22, hero.y + 18, 44, 4);
+    this.graphics.fillStyle(ratio > 0.35 ? 0xa8f29e : 0xff6b6b, 1);
+    this.graphics.fillRect(hero.x - 22, hero.y + 18, 44 * ratio, 4);
+  }
+
+  private drawHeroLabel(state: RunState): void {
+    const hero = state.phase === "execution" ? state.simulation.fighters.find((fighter) => fighter.hero) : undefined;
+    if (!hero?.hero) {
+      this.heroLabel.setVisible(false);
+      return;
+    }
+    this.heroLabel
+      .setText(hero.hero.shipName)
+      .setColor(`#${hero.color.toString(16).padStart(6, "0")}`)
+      .setPosition(hero.x, hero.y - 26)
+      .setVisible(true);
+  }
+
+  private getRescueShips(state: RunState): Array<{ id: string; x: number; y: number }> {
+    const rescue = state.simulation.rescue;
+    if (!rescue) {
+      return [];
+    }
+    const progress = rescue.age / RESCUE_SWEEP_TIME;
+    return RESCUE_FORMATION.map((offset, index) => ({
+      id: `alien-${index}`,
+      x: -120 + progress * (GAME_WIDTH + 240) - offset.lag,
+      y: offset.y + Math.sin(rescue.age * 4 + index) * 10,
+    }));
+  }
+
+  private drawRescue(state: RunState): void {
+    const rescue = state.simulation.rescue;
+    if (!rescue) {
+      return;
+    }
+    const color = ALIEN_COLORS[rescue.species] ?? 0xffffff;
+    const flash = Math.max(0, 1 - rescue.age / 0.6);
+    if (flash > 0) {
+      this.graphics.fillStyle(color, 0.25 * flash);
+      this.graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
+    for (const ship of this.getRescueShips(state)) {
+      this.graphics.fillStyle(color, 0.25);
+      this.graphics.fillCircle(ship.x, ship.y, 22);
+      this.graphics.fillStyle(color, 0.95);
+      if (rescue.species === "tide") {
+        this.graphics.fillEllipse(ship.x, ship.y, 54, 18);
+      } else if (rescue.species === "aunties") {
+        this.graphics.fillPoints([new Phaser.Geom.Point(ship.x + 16, ship.y), new Phaser.Geom.Point(ship.x, ship.y - 12), new Phaser.Geom.Point(ship.x - 16, ship.y), new Phaser.Geom.Point(ship.x, ship.y + 12)], true);
+        this.graphics.lineStyle(2, 0xffffff, 0.8);
+        this.graphics.lineBetween(ship.x - 22, ship.y - 10, ship.x + 22, ship.y + 10);
+      } else if (rescue.species === "choir") {
+        this.graphics.fillTriangle(ship.x + 18, ship.y, ship.x - 12, ship.y - 12, ship.x - 12, ship.y + 12);
+        this.graphics.fillCircle(ship.x - 14, ship.y, 5);
+      } else {
+        this.graphics.fillCircle(ship.x, ship.y - 4, 12);
+        for (let tendril = -2; tendril <= 2; tendril += 1) {
+          this.graphics.lineStyle(2, color, 0.8);
+          this.graphics.lineBetween(ship.x + tendril * 4, ship.y + 6, ship.x + tendril * 5 - 8, ship.y + 22);
+        }
+      }
+    }
+  }
+
   private collectBoosterEmitters(state: RunState): BoosterEmitter[] {
     const emitters: BoosterEmitter[] = [];
+    for (const ship of this.getRescueShips(state)) {
+      emitters.push({ id: ship.id, x: ship.x, y: ship.y, scale: 1.6 });
+    }
     for (const bot of state.ship.bots) {
       if (bot.evade) {
         emitters.push({ id: bot.id, x: bot.x, y: bot.y, scale: 1 });
@@ -870,6 +985,7 @@ export class RunScene extends Phaser.Scene {
       fighterIds: new Set(simulation.fighters.map((fighter) => fighter.id)),
       announcement: simulation.announcement?.text,
       calloutCount: simulation.callouts.length,
+      comm: simulation.activeComm?.line.text,
       launching: state.phase === "execution" && simulation.launchCountdown > 0,
       bossIntro: simulation.bossEncounter.introTimer > 0,
       hull: state.ship.hull,
@@ -905,6 +1021,9 @@ export class RunScene extends Phaser.Scene {
     }
     if (next.announcement && next.announcement !== previous.announcement) {
       playSound("announce");
+    }
+    if (next.comm && next.comm !== previous.comm) {
+      playSound("coin", 150);
     }
     if (next.calloutCount > previous.calloutCount) {
       playSound("dodge");
