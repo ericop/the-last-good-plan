@@ -1,7 +1,9 @@
-import { ALIEN_SPECIES, CAMPAIGN_LENGTH, CAMPAIGN_LEVELS, RESCUE_LINES, UNCHARTED_BULLETINS, type CampaignLevel } from "../data/story";
+import { getEpicModuleById } from "../data/epicModuleRegistry";
+import { ALIEN_SPECIES, CAMPAIGN_LENGTH, CAMPAIGN_LEVELS, coreGiftLines, RESCUE_LINES, UNCHARTED_BULLETINS, type CampaignLevel } from "../data/story";
 import { WARSHIP_DEFINITIONS } from "../data/warships";
 import { GAME_WIDTH, SHIP_CENTER } from "../game/constants";
 import type { DialogLine, DialogScene, FighterInstance, RunState, SectorMap, SpeakerId } from "../types/gameTypes";
+import { getBossForCycle } from "./bossManager";
 import { isCapitalShip } from "./encounters";
 import { addMessage } from "./utils";
 
@@ -352,6 +354,22 @@ export function recordCampaignClear(state: RunState): void {
     return;
   }
   state.campaign.highestLevelCleared = Math.max(state.campaign.highestLevelCleared, level.number);
+  if (level.number === CAMPAIGN_LENGTH) {
+    state.campaign.coreGift = state.simulation.bossEncounter.rewardEpicId ?? getBossForCycle(state.cycle).reward;
+  }
+}
+
+// The finale's boss core drops as the campaign ends, so it is handed over at the start of the next Uncharted run.
+export function grantCoreGift(state: RunState): void {
+  const gift = state.campaign.coreGift;
+  if (!gift || state.mode !== "roguelike" || state.tutorial.active) {
+    return;
+  }
+  state.ship.epicInventory[gift] += 1;
+  state.campaign.coreGift = undefined;
+  const core = getEpicModuleById(gift);
+  openDialog(state, { lines: coreGiftLines(core.name) });
+  addMessage(state, `${core.name} loaded into the build tray.`);
 }
 
 export function isCampaignFinale(state: RunState): boolean {

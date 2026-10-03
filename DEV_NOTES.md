@@ -18,6 +18,10 @@ The key future-proofing choice is that UI and scene input never mutate gameplay 
   sets its duration. Swarm waves trickle into `simulation.pendingSpawns` and then walk `LANE_YS` toward the ship.
 - Warships and bosses are "capital ships": any enemy with `holdX`. `tickCapitalShip` parks them, charges their weapons,
   regenerates shields, launches escorts, and runs point defense. Their volleys become `simulation.projectiles`.
+- Missions run 80s (swarm, nebula, duel), 90s (boss), or 50s (derelict), set in `getCycleDuration`. Waves are spaced so
+  most of them reach the ship before the clock ends; on a shorter clock the late waves were still marching in when the
+  mission ended, which hid how much damage they do. A balance pass with scripted players tuned wave sizes against
+  this, so retune `createThreatSchedule` together with any duration change.
 - Destroying a duel's warship ends the mission 4 seconds later. If the timer runs out first, it disengages.
 - A `beam` weapon does not fire a projectile. It locks a `simulation.barrages` entry with a warning timer. While the
   warning runs, each bot or fighter that enters the corridor rolls its dodge once; a success gives it an `evade` order
@@ -62,6 +66,8 @@ The key future-proofing choice is that UI and scene input never mutate gameplay 
   the intro choice), locks the doom lance, and triggers the rescue.
 - Dialog is `state.story.dialog`, advanced by `advance_dialog` and `choose_dialog` and cleared by `skip_dialog`; it blocks
   `continue_from_results` and hides the tutorial bubble while open.
+- Clearing the finale stores the boss's epic core in `campaign.coreGift`. `grantCoreGift` puts it in the build tray
+  of the next Uncharted run (not a tutorial run) with a short dialog, then clears it.
 - A campaign checkpoint (a JSON snapshot of the run) is saved at the start of every level in
   `state.campaign.checkpoint` and persisted with the save; `retry_level` and "Continue" restore it.
 - The ☰ pause menu is UI-only state in `UIManager` (`menuOpen`, `pausedByMenu`): it pauses execution on open and

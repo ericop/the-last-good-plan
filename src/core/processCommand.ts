@@ -6,7 +6,7 @@ import type { BotInstance, ModuleId, RunState, SaveData, ShipSlot } from "../typ
 import { createRunState, prepareExecutionState, resetForNextCycle, selectNode } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
 import { isLaunchPortUnlocked } from "./hangar";
-import { advanceDialog, chooseDialog, isCampaignFinale, parseSeed, restoreCheckpoint, skipDialog } from "./story";
+import { advanceDialog, chooseDialog, grantCoreGift, isCampaignFinale, parseSeed, restoreCheckpoint, skipDialog } from "./story";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
 import {
   addMessage,
@@ -92,7 +92,9 @@ function withProgress(state: RunState, saveData: SaveData): SaveData {
 export function processCommand(state: RunState, command: GameCommand, saveData: SaveData): RunState {
   switch (command.type) {
     case "start_new_run": {
-      return createRunState(withProgress(state, saveData), "planning", { mode: state.mode });
+      const next = createRunState(withProgress(state, saveData), "planning", { mode: state.mode });
+      grantCoreGift(next);
+      return next;
     }
     case "start_campaign": {
       if (!state.campaign.storyUnlocked) {
@@ -107,7 +109,9 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return createRunState(withProgress(state, saveData), "planning", { mode: "campaign" });
     }
     case "start_roguelike": {
-      return createRunState(withProgress(state, saveData), "planning", { mode: "roguelike", seed: parseSeed(command.seed) });
+      const next = createRunState(withProgress(state, saveData), "planning", { mode: "roguelike", seed: parseSeed(command.seed) });
+      grantCoreGift(next);
+      return next;
     }
     case "retry_level": {
       return state.mode === "campaign" && state.phase === "run_over" ? restoreCheckpoint(state) ?? state : state;

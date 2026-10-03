@@ -472,6 +472,13 @@ export const CAMPAIGN_LEVELS: CampaignLevel[] = [
 
 export const CAMPAIGN_LENGTH = CAMPAIGN_LEVELS.length;
 
+export function coreGiftLines(coreName: string): DialogLine[] {
+  return [
+    line("ship", `Cargo check: the Warden's ${coreName} came with us from story mode. It's waiting in your build tray.`),
+    line("pip", "Okay, hear me out: put it on the ship, then merge it into a bot. Instant super bot!"),
+  ];
+}
+
 export const UNCHARTED_BULLETINS: DialogLine[][] = [
   [line("interim", "Uncharted bulletin from Dale: the Porch Committee was spotted holding a meeting on a moon. It's loud.")],
   [line("governor", "Odessa here. Your parents say hello, and that you are grounded, lovingly.")],

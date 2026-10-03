@@ -341,6 +341,7 @@ export interface CampaignProgress {
   highestLevelCleared: number;
   storyUnlocked: boolean;
   checkpoint?: string;
+  coreGift?: EpicModuleId;
 }
 
 export interface TimedStoryEvent {

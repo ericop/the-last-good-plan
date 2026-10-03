@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAMPAIGN_LEVELS, SPEAKERS, UNCHARTED_BULLETINS } from "../data/story";
+import { CAMPAIGN_LEVELS, coreGiftLines, SPEAKERS, UNCHARTED_BULLETINS } from "../data/story";
 import { WARSHIP_DEFINITIONS } from "../data/warships";
 import { GameController } from "./gameController";
 import { createRunState } from "./createRunState";
@@ -72,7 +72,7 @@ describe("campaign script", () => {
       ...(level.intro.choice?.options.flatMap((option) => option.reply) ?? []),
       ...level.outro,
       ...level.events.flatMap((event) => [...(event.lines ?? []), ...Object.values(event.byTag ?? {}).flat()]),
-    ]).concat(UNCHARTED_BULLETINS.flat());
+    ]).concat(UNCHARTED_BULLETINS.flat(), coreGiftLines("Dawn Prism"));
 
   it("has ten levels that end in the boss, with authored duels, escorts, and rescues", () => {
     expect(CAMPAIGN_LEVELS.map((level) => level.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
@@ -220,11 +220,11 @@ describe("campaign completion and the uncharted roguelike", () => {
       expect(state.cycle).toBe(level);
       state.resources = { solar: 999, minerals: 999, scrap: 999 };
       launch(state, saveData);
-      state.ship.maxHull = 5000;
-      state.ship.hull = 5000;
+      state.ship.maxHull = 50000;
+      state.ship.hull = 50000;
       for (const fighter of state.simulation.fighters.filter((candidate) => candidate.hero)) {
-        fighter.maxHp = 5000;
-        fighter.hp = 5000;
+        fighter.maxHp = 50000;
+        fighter.hp = 50000;
       }
       step(state, 240);
       expect(state.phase, `level ${level}`).toBe("results");
@@ -245,7 +245,13 @@ describe("campaign completion and the uncharted roguelike", () => {
     const uncharted = processCommand(state, { type: "start_roguelike", seed: "LANTRN" }, saveData);
     expect(uncharted.mode).toBe("roguelike");
     expect(uncharted.sector.seed).toBe(parseSeed("LANTRN"));
-    expect(uncharted.story.dialog).toBeUndefined();
+    expect(uncharted.ship.epicInventory.dawn_prism).toBe(1);
+    expect(uncharted.story.dialog?.lines[0].text).toContain("Dawn Prism");
+    expect(uncharted.campaign.coreGift).toBeUndefined();
+
+    const nextRun = processCommand(uncharted, { type: "start_new_run" }, saveData);
+    expect(nextRun.ship.epicInventory.dawn_prism).toBe(0);
+    expect(nextRun.story.dialog).toBeUndefined();
   });
 
   it("starts in free play and unlocks story mode after the first cleared mission", () => {
