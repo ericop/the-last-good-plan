@@ -27,6 +27,28 @@ The key future-proofing choice is that UI and scene input never mutate gameplay 
 - `src/game/effects/boosterTrails.ts` draws booster streaks for anything evading, launching, arriving, or knocked back.
 - To add a warship, append to `src/data/warships.ts`. The duel rotation cycles through that list.
 
+## Layouts
+
+- `src/ui/layoutMode.ts` picks `pocket` (portrait under 700px wide), `compact`, or `arena` (1180px and up). `UIManager`
+  writes it to `#app[data-layout]` for CSS, and `RunScene` reads it to decide whether to rotate the battlefield.
+- Pocket rotates one Phaser container by -90° and swaps the game size to 640×960; the sim never sees the rotation.
+  Anything added to the scene must go into `this.world`, and new texts need `setRotation(-this.world.rotation)`.
+- All HUD text lives in the DOM (`UIManager`), never in the canvas, so it stays readable at phone scale.
+
+## Sector Map, Chests, and Debrief
+
+- `state.routeOptions` is rolled in `resetForNextCycle` from `getRouteOptions`; `choose_route` rebuilds the planning
+  simulation for that route via `selectRoute`. Route rules (encounter, blurb, tip) live in `ROUTES` in `encounters.ts`.
+- Rewards found mid-mission are pushed to `simulation.chests` instead of pausing. `open_chest` moves one into
+  `pendingReward` during the debrief, and `continue_from_results` refuses to advance until the queue is empty.
+- `finalizeCycle` scores `summary.stars` and `summary.mvp` (fallen bots are eligible).
+
+## Tests
+
+- `npm run test` runs everything. `src/core/missionFlow.test.ts` plays whole missions on every route headlessly and is
+  the first place to look when a sim change breaks something. `src/ui/uiManager.test.ts` renders the real DOM UI under
+  happy-dom through every phase and both layouts.
+
 ## Carrier Launch Ports
 
 - `launch_port` is a module, but it is excluded from merges via `MergeableModuleId`.

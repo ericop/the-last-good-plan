@@ -38,6 +38,12 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
 - Booster module: each Booster merged into a bot gives 33% dodge (66% with two). Placed on the ship, it pulses
   nearby small enemies back down their lanes
 - Booster trails and the charge-shot warning are ported from [Rainbow-Survivors](https://github.com/ericop/Rainbow-Survivors)
+- Sector map: pick your next jump between Swarm, Ship Duel, Nebula Run (no shields, double scrap) and Derelict
+  Salvage (lighter fight, free supplies). Every 10th jump is a boss
+- Two native layouts over one game: a portrait phone layout with the battlefield turned so enemies come down toward
+  your ship, and a desktop "arena" layout with hotkeys, fleet frames, a wave timeline and a killfeed
+- Mission debrief with 1 to 3 stars, count-up rewards, an MVP bot, and every chest collected during the fight
+- Sound and haptics (mute from the top-right corner)
 - Carrier play: research Hangar Tech to build Launch Ports that launch a fighter wing on their own during battle
   - Ports next to a Mineral Drill build mining skiffs, next to a Repair Node build tenders, otherwise interceptors
   - Adjacent Pulse Cannons, Shield Emitters, and Solar Collectors boost wing firepower, hull, and launch speed
