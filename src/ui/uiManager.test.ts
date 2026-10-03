@@ -139,7 +139,7 @@ describe("UI renders every phase without breaking", () => {
     controller.dispatch({ type: "toggle_pause" });
 
     expect(root.querySelector(".scoreboard .side-label.enemy")?.textContent).toContain(warship.name);
-    expect(root.querySelector(".scoreboard .telegraph")?.textContent).toContain("Siege Lance");
+    expect(root.querySelector(".scoreboard .telegraph:not(.soft)")?.textContent).toContain("Siege Lance");
     expect(root.querySelector("#canvas-shell")?.classList.contains("lance-alarm")).toBe(true);
     expect(root.querySelector(".pause-veil")).not.toBeNull();
     expect(root.querySelector(".announcement")?.textContent).toContain("WARSHIP INBOUND");
@@ -243,18 +243,55 @@ describe("story UI", () => {
     setViewport(1440, 900);
   });
 
-  it("locks Uncharted on the menu until the campaign is beaten, then starts it from a seed", () => {
+  it("leads the menu with free play and locks story mode until the first clear", () => {
     const { root, controller, click } = mount();
-    expect(root.querySelector(".uncharted-locked")).not.toBeNull();
-    expect(root.querySelector("#seed-input")).toBeNull();
-
-    controller.getState().campaign.roguelikeUnlocked = true;
+    controller.getState().campaign.storyUnlocked = false;
     controller.dispatch({ type: "set_dock_panel", panelId: "ship" });
+    expect(root.querySelector(".uncharted-locked")?.textContent).toContain("first mission");
+    expect(root.querySelector("[data-action='start-campaign']")).toBeNull();
+
+    controller.getState().campaign.storyUnlocked = true;
+    controller.dispatch({ type: "set_dock_panel", panelId: "log" });
+    expect(root.querySelector(".uncharted-locked")).toBeNull();
+    expect(root.querySelector("[data-action='start-campaign']")).not.toBeNull();
     const input = root.querySelector<HTMLInputElement>("#seed-input")!;
     input.value = "abc123";
     click("[data-action='start-roguelike']");
     expect(controller.getState().mode).toBe("roguelike");
     expect(root.querySelector(".resource-pill.seed")?.textContent).toContain("ABC123");
+  });
+
+  it("skips story dialog with the Skip button or Esc", () => {
+    const { root, controller, click } = mount();
+    click("[data-action='start-campaign'][data-fresh='true']");
+    click("[data-action='skip-dialog']");
+    expect(controller.getState().story.dialog).toBeUndefined();
+    expect(root.querySelector(".dialog-card")).toBeNull();
+
+    controller.dispatch({ type: "return_to_menu" });
+    controller.dispatch({ type: "start_campaign", fresh: true });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(controller.getState().story.dialog).toBeUndefined();
+  });
+
+  it("shows the first-clear tip in the debrief", () => {
+    const { root, controller } = mount();
+    startPlanning(controller);
+    const state = controller.getState();
+    state.phase = "results";
+    state.summary = {
+      title: "Mission complete",
+      text: "",
+      tip: "You win a mission by surviving until the clock hits zero.",
+      gains: { solar: 0, minerals: 0, scrap: 0 },
+      losses: { botsDestroyed: 0, hullDamage: 0 },
+      discoveries: [],
+      rewards: [],
+      perfectCommitmentReward: { solar: 0, minerals: 0, scrap: 0 },
+      stars: [],
+    };
+    controller.dispatch({ type: "set_dock_panel", panelId: "ship" });
+    expect(root.querySelector(".debrief-tip")?.textContent).toContain("surviving");
   });
 
   it("plays the intro dialog with click-through lines and choice buttons", () => {
@@ -306,6 +343,47 @@ describe("story UI", () => {
   });
 });
 
+describe("pause menu", () => {
+  beforeEach(() => {
+    setViewport(1440, 900);
+  });
+
+  it("pauses a running mission, resumes on close, and opens the discovery log", () => {
+    const { root, controller, click } = mount();
+    startPlanning(controller);
+    controller.dispatch({ type: "select_fabrication_module", moduleId: "pulse_cannon" });
+    controller.dispatch({ type: "board_slot_pressed", slotId: "slot_0_0" });
+    controller.dispatch({ type: "begin_execution" });
+    expect(controller.getState().phase).toBe("execution");
+    expect(controller.getState().paused).toBe(false);
+
+    click(".menu-toggle");
+    expect(root.querySelector(".pause-menu h2")?.textContent).toBe("Paused");
+    expect(controller.getState().paused).toBe(true);
+    click("[data-action='close-menu']");
+    expect(root.querySelector(".pause-menu")).toBeNull();
+    expect(controller.getState().paused).toBe(false);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(root.querySelector(".pause-menu")).not.toBeNull();
+    click("[data-action='open-discoveries']");
+    expect(controller.getState().ui.activeDockPanel).toBe("log");
+    expect(root.querySelector(".pause-menu")).toBeNull();
+  });
+
+  it("asks twice before abandoning a run for the main menu", () => {
+    const { root, controller, click } = mount();
+    startPlanning(controller);
+    click(".menu-toggle");
+    click(".pause-menu [data-action='return-to-menu']");
+    expect(controller.getState().phase).toBe("planning");
+    expect(root.querySelector(".pause-menu [data-action='return-to-menu']")?.textContent).toContain("Tap again");
+    click(".pause-menu [data-action='return-to-menu']");
+    expect(controller.getState().phase).toBe("menu");
+    expect(root.querySelector(".pause-menu")).toBeNull();
+  });
+});
+
 describe("pocket layout", () => {
   it("uses the pocket layout on portrait phones and opens dock panels as sheets", () => {
     setViewport(375, 812);
@@ -314,6 +392,8 @@ describe("pocket layout", () => {
     expect(root.dataset.layout).toBe("pocket");
     expect(root.querySelector("#rail-waves")?.innerHTML.trim()).toBe("");
     expect(root.querySelectorAll(".dock-button")).toHaveLength(3);
+    expect(root.querySelector(".dock-button.menu-button")).not.toBeNull();
+    expect(root.querySelector("[data-action='set-dock'][data-panel='log']")).toBeNull();
 
     click("[data-action='set-dock'][data-panel='bots']");
     expect(root.classList.contains("sheet-open")).toBe(true);

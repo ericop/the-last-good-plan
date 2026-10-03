@@ -1065,7 +1065,8 @@ kbd,
   color: var(--loot);
 }
 
-.sound-toggle {
+.sound-toggle,
+.menu-toggle {
   margin-left: auto;
 }
 
@@ -2444,22 +2445,20 @@ kbd,
   display: none;
 }
 
-#app[data-layout="pocket"] .resource-strip:not(.menu) .sound-toggle {
+#app[data-layout="pocket"] .menu-toggle {
   display: none;
 }
 
-.sound-setting {
-  display: none;
-}
-
-#app[data-layout="pocket"] .sound-setting {
-  display: block;
-}
-
-.sound-setting .ui-button {
+#app[data-layout="pocket"] .dock-button.menu-button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  min-width: 40px;
+}
+
+#app[data-layout="pocket"] .dock-button.menu-button .icon {
+  width: 20px;
+  height: 20px;
 }
 
 #app[data-layout="pocket"] .resource-strip {
@@ -2979,6 +2978,83 @@ kbd,
 
 .dialog-option:hover {
   border-color: var(--speaker-color);
+}
+
+.dialog-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-controls .dialog-options {
+  order: -1;
+  flex: 1 1 100%;
+}
+
+.dialog-skip {
+  margin-right: auto;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.debrief-tip {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(246, 207, 98, 0.45);
+  background: rgba(246, 207, 98, 0.1);
+  color: #f2e7c5;
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.menu-story {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(246, 207, 98, 0.3);
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+}
+
+.menu-story p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.pause-menu {
+  width: min(380px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  text-align: center;
+  animation: card-slide 0.3s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+.pause-menu h2 {
+  margin: 0 0 4px;
+}
+
+.pause-menu .mission-button,
+.pause-menu .ui-button {
+  width: 100%;
+  min-height: 48px;
+  justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pause-menu .icon {
+  width: 20px;
+  height: 20px;
 }
 
 .dialog-next {

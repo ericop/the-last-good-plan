@@ -48,7 +48,7 @@ const DOCK_ITEMS: Array<{ id: DockPanelId; label: string; pocket: boolean }> = [
   { id: "build", label: "Codex", pocket: false },
   { id: "bots", label: "Fleet", pocket: true },
   { id: "doctrine", label: "Doctrine", pocket: false },
-  { id: "log", label: "Log", pocket: true },
+  { id: "log", label: "Log", pocket: false },
 ];
 
 const DOCTRINE_HOTKEYS: Record<string, RunState["doctrine"]> = { q: "balanced", w: "extraction_focus", e: "preservation_mode" };
@@ -80,6 +80,7 @@ const ICONS: Record<string, string> = {
   star: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3 6.6 7.2.8-5.4 4.9 1.5 7.1L12 17.8 5.7 21.4l1.5-7.1L1.8 9.4 9 8.6z" fill="currentColor"/></svg>`,
   chest: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18v10H3z" fill="currentColor"/><path d="M3 10a9 5 0 0 1 18 0z" fill="currentColor" opacity=".8"/><path d="M3 12.5h18" stroke="#0b1720" stroke-width="1.4"/><rect x="10.5" y="11" width="3" height="4" rx=".8" fill="#0b1720"/></svg>`,
   sound_on: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`,
+  menu: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`,
   sound_off: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/><path d="m16 9 6 6m0-6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   pause: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/></svg>`,
   play: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" fill="currentColor"/></svg>`,
@@ -157,6 +158,8 @@ export class UIManager {
   private railKills: HTMLElement;
   private layoutMode: LayoutMode = getLayoutMode();
   private sheetOpen = false;
+  private menuOpen = false;
+  private pausedByMenu = false;
 
   constructor(private root: HTMLElement, private controller: GameController) {
     root.innerHTML = `
@@ -243,6 +246,29 @@ export class UIManager {
     details.textContent = getFabricationCardData(packet.dataset.module as FabricationOptionId).description;
   };
 
+  private openMenu(): void {
+    const state = this.controller.getState();
+    if (state.phase === "menu") {
+      return;
+    }
+    this.menuOpen = true;
+    if (state.phase === "execution" && !state.paused) {
+      this.pausedByMenu = true;
+      this.controller.dispatch({ type: "toggle_pause" });
+    }
+    this.render(this.controller.getState());
+  }
+
+  private closeMenu(): void {
+    this.menuOpen = false;
+    const state = this.controller.getState();
+    if (this.pausedByMenu && state.phase === "execution" && state.paused) {
+      this.controller.dispatch({ type: "toggle_pause" });
+    }
+    this.pausedByMenu = false;
+    this.render(this.controller.getState());
+  }
+
   private handleHotkey = (event: KeyboardEvent): void => {
     if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) {
       return;
@@ -252,7 +278,17 @@ export class UIManager {
     if ((event.target as HTMLElement | null)?.tagName === "INPUT") {
       return;
     }
+    if (this.menuOpen) {
+      if (key === "escape") {
+        this.closeMenu();
+      }
+      return;
+    }
     const dialog = state.story.dialog;
+    if (dialog && key === "escape") {
+      this.controller.dispatch({ type: "skip_dialog" });
+      return;
+    }
     if (dialog) {
       const atChoice = dialog.index >= dialog.lines.length - 1 && dialog.options;
       const choice = Number(key);
@@ -266,8 +302,12 @@ export class UIManager {
     }
     if (state.phase === "menu") {
       if (key === "enter") {
-        this.controller.dispatch({ type: "start_campaign", fresh: !state.campaign.checkpoint });
+        this.controller.dispatch({ type: "start_roguelike", seed: this.root.querySelector<HTMLInputElement>("#seed-input")?.value });
       }
+      return;
+    }
+    if (key === "escape" && !(state.phase === "planning" && state.ui.selectedFabricationModuleId)) {
+      this.openMenu();
       return;
     }
     if (state.phase === "results") {
@@ -381,7 +421,7 @@ export class UIManager {
         const fresh = actionElement.dataset.fresh !== "false";
         if (fresh && this.controller.getState().campaign.checkpoint && actionElement.dataset.armed !== "true") {
           actionElement.dataset.armed = "true";
-          actionElement.textContent = "Tap again to restart from Level 1";
+          actionElement.textContent = "Tap again to restart the story from Level 1";
           break;
         }
         this.controller.dispatch({ type: "start_campaign", fresh });
@@ -393,8 +433,33 @@ export class UIManager {
       case "retry-level":
         this.controller.dispatch({ type: "retry_level" });
         break;
-      case "return-to-menu":
+      case "return-to-menu": {
+        const warning = this.getAbandonWarning(this.controller.getState());
+        if (warning && actionElement.dataset.armed !== "true") {
+          actionElement.dataset.armed = "true";
+          actionElement.textContent = warning;
+          break;
+        }
+        this.menuOpen = false;
+        this.pausedByMenu = false;
         this.controller.dispatch({ type: "return_to_menu" });
+        break;
+      }
+      case "skip-dialog":
+        this.controller.dispatch({ type: "skip_dialog" });
+        break;
+      case "open-menu":
+        this.openMenu();
+        break;
+      case "close-menu":
+        this.closeMenu();
+        break;
+      case "open-discoveries":
+        this.menuOpen = false;
+        this.pausedByMenu = false;
+        this.sheetOpen = this.layoutMode === "pocket";
+        this.controller.dispatch({ type: "set_dock_panel", panelId: "log" });
+        this.render(this.controller.getState());
         break;
       case "advance-dialog":
         this.controller.dispatch({ type: "advance_dialog" });
@@ -413,11 +478,13 @@ export class UIManager {
         this.controller.dispatch({ type: "skip_tutorial" });
         break;
       case "replay-tutorial":
-        if (this.controller.getState().campaign.checkpoint && actionElement.dataset.armed !== "true") {
+        if (this.controller.getState().phase !== "menu" && actionElement.dataset.armed !== "true") {
           actionElement.dataset.armed = "true";
-          actionElement.textContent = "Tap again: this restarts the campaign";
+          actionElement.textContent = "Tap again: this starts a new tutorial run";
           break;
         }
+        this.menuOpen = false;
+        this.pausedByMenu = false;
         this.controller.dispatch({ type: "replay_tutorial" });
         break;
       default:
@@ -505,7 +572,7 @@ export class UIManager {
         ).join("")}
         <span class="resource-pill cycle"><small>${state.mode === "campaign" ? "Level" : "Mission"}</small><strong>${state.cycle}</strong></span>
         ${state.mode === "roguelike" ? `<span class="resource-pill cycle seed"><small>Seed</small><strong>${formatSeed(state.sector.seed)}</strong></span>` : ""}
-        ${soundToggle}
+        <button class="icon-button menu-toggle" data-action="open-menu" aria-label="Menu">${icon("menu")}</button>
       </div>
     `;
   }
@@ -865,6 +932,8 @@ export class UIManager {
   }
 
   private renderDockNav(state: RunState): string {
+    const menuButton =
+      this.layoutMode === "pocket" ? `<button class="dock-button menu-button" data-action="open-menu" aria-label="Menu">${icon("menu")}</button>` : "";
     return DOCK_ITEMS.filter((item) => this.layoutMode !== "pocket" || item.pocket).map((item) => {
       const locked = this.isDockPanelLocked(state, item.id);
       const selected = this.getVisibleDockPanel(state) === item.id;
@@ -873,7 +942,7 @@ export class UIManager {
           ${item.label}
         </button>
       `;
-    }).join("");
+    }).join("") + menuButton;
   }
 
   private renderDockPanel(state: RunState): string {
@@ -940,10 +1009,6 @@ export class UIManager {
         <div class="message-list">
           ${state.simulation.messageLog.slice(0, 5).map((entry) => `<div class="message-entry">${entry}</div>`).join("")}
         </div>
-      </div>
-      <div class="panel-block sound-setting">
-        <span class="eyebrow">Sound</span>
-        <button class="ui-button secondary" data-action="toggle-sound">${icon(isMuted() ? "sound_off" : "sound_on")} ${isMuted() ? "Sound off" : "Sound on"}</button>
       </div>
       <div class="panel-block">
         <span class="eyebrow">Tutorial</span>
@@ -1156,28 +1221,54 @@ export class UIManager {
   private renderMenuCard(state: RunState): string {
     const progress = state.campaign;
     const checkpoint = progress.checkpoint ? (JSON.parse(progress.checkpoint) as Pick<RunState, "cycle">) : undefined;
-    const continueLabel = checkpoint ? `Continue · Level ${checkpoint.cycle}: ${CAMPAIGN_LEVELS[checkpoint.cycle - 1]?.title ?? ""}` : "";
-    const uncharted = progress.roguelikeUnlocked
+    const story = progress.storyUnlocked
       ? `
-        <div class="uncharted-row">
-          <input class="seed-input" id="seed-input" maxlength="24" placeholder="Seed" aria-label="Seed" />
-          <button class="ui-button primary" data-action="start-roguelike">Launch Uncharted ▸</button>
+        <div class="menu-story">
+          <span class="eyebrow">Story mode</span>
+          <p>The Governor relocated your parents to the stars, for the public good. Borrow a mining hauler and bring them home.</p>
+          <div class="menu-actions">
+            ${checkpoint ? `<button class="ui-button primary" data-action="start-campaign" data-fresh="false">Continue · Level ${checkpoint.cycle}: ${CAMPAIGN_LEVELS[checkpoint.cycle - 1]?.title ?? ""} ▸</button>` : ""}
+            <button class="ui-button" data-action="start-campaign" data-fresh="true">${checkpoint ? "Restart the story" : "Start the story ▸"}</button>
+          </div>
         </div>
-        <small class="fine-print">Uncharted is the seeded roguelike: branching sectors with a boss every tenth jump. Leave the seed blank for a random run, or share one to share a run.</small>
       `
-      : `<div class="uncharted-locked">${icon("lock")}<span><b>Uncharted</b> unlocks when you beat the Sector 1 campaign (${progress.highestLevelCleared}/${CAMPAIGN_LENGTH} levels).</span></div>`;
+      : `<div class="uncharted-locked">${icon("lock")}<span><b>Story mode</b> unlocks after you clear your first mission.</span></div>`;
     return `
       <section class="menu-card">
         <h1>The Last Good Plan</h1>
-        <p class="menu-tagline">The Governor relocated your parents to the stars, for the public good. Borrow a mining hauler and bring them home.</p>
-        <div class="menu-actions">
-          ${checkpoint ? `<button class="mission-button primary-cta ready" data-action="start-campaign" data-fresh="false">${continueLabel} ▸</button>` : ""}
-          <button class="${checkpoint ? "ui-button" : "mission-button primary-cta ready"}" data-action="start-campaign" data-fresh="true">${checkpoint ? "New campaign" : "Start the campaign ▸"}</button>
+        <p class="menu-tagline">Build a ship, merge modules into bots, pick your jumps, and watch the fight play out.</p>
+        <button class="mission-button primary-cta ready menu-play" data-action="start-roguelike">Play ▸</button>
+        <div class="uncharted-row">
+          <input class="seed-input" id="seed-input" maxlength="24" placeholder="Seed (optional)" aria-label="Seed" />
         </div>
-        ${uncharted}
-        <button class="ui-button ghost" data-action="replay-tutorial">Replay tutorial</button>
+        <small class="fine-print">Every run is a fresh branching sector with a boss at the tenth jump. Share a seed to share a map.</small>
+        ${story}
+        <button class="ui-button ghost" data-action="replay-tutorial">Show me the tutorial</button>
       </section>
     `;
+  }
+
+  private renderPauseMenu(state: RunState): string {
+    const discovered = MERGE_RECIPES.filter((recipe) => state.discovery[recipe.id]?.state !== "unknown").length;
+    const running = state.phase === "execution";
+    return `
+      <section class="modal-card pause-menu">
+        <span class="encounter-kicker">${state.mode === "campaign" ? "Story" : "Uncharted"} · ${state.simulation.encounterName}</span>
+        <h2>${running ? "Paused" : "Menu"}</h2>
+        <button class="mission-button primary-cta ready" data-action="close-menu">Resume ▸</button>
+        <button class="ui-button" data-action="toggle-sound">${icon(isMuted() ? "sound_off" : "sound_on")} Sound: ${isMuted() ? "off" : "on"}</button>
+        <button class="ui-button" data-action="open-discoveries" ${state.tutorial.active ? "disabled" : ""}>Bot discoveries · ${discovered}/${MERGE_RECIPES.length}</button>
+        ${state.tutorial.active ? "" : `<button class="ui-button" data-action="replay-tutorial">Show me the tutorial again</button>`}
+        <button class="ui-button ghost" data-action="return-to-menu">Main menu</button>
+      </section>
+    `;
+  }
+
+  private getAbandonWarning(state: RunState): string | undefined {
+    if (state.phase !== "planning" && state.phase !== "execution" && state.phase !== "results") {
+      return undefined;
+    }
+    return state.mode === "campaign" ? "Tap again: Continue picks up at the start of this level" : "Tap again: this run will end";
   }
 
   private renderDialog(state: RunState): string {
@@ -1196,13 +1287,14 @@ export class UIManager {
           )
           .join("")}</div>`
       : `<button class="ui-button primary dialog-next" data-action="advance-dialog">Next ▸ <kbd class="hotkey">Enter</kbd></button>`;
+    const skip = `<button class="ui-button ghost dialog-skip" data-action="skip-dialog">Skip ⏭ <kbd class="hotkey">Esc</kbd></button>`;
     return `
       <section class="modal-card dialog-card" style="--speaker-color:${speaker.color}">
         <div class="dialog-portrait">${speaker.short}</div>
         <div class="dialog-body">
           <span class="dialog-speaker">${speaker.name}</span>
           <p class="dialog-text" data-line="${dialog.index}">${current.text}</p>
-          ${controls}
+          <div class="dialog-controls">${skip}${controls}</div>
         </div>
       </section>
     `;
@@ -1210,6 +1302,9 @@ export class UIManager {
 
   private renderModals(state: RunState): string {
     const layers: string[] = [];
+    if (this.menuOpen && state.phase !== "menu") {
+      return this.renderPauseMenu(state);
+    }
     const dialog = this.renderDialog(state);
     if (dialog) {
       return dialog;
@@ -1335,6 +1430,7 @@ export class UIManager {
         <div class="debrief-gains">${gains}</div>
         ${mvp}
         ${chestBlock}
+        ${summary.tip ? `<p class="debrief-tip">${summary.tip}</p>` : ""}
         ${extras ? `<p class="fine-print">${extras}</p>` : ""}
         ${primary}
       </section>
