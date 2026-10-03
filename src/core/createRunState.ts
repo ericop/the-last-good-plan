@@ -14,11 +14,10 @@ import {
   createCycleThreatSchedule,
   DERELICT_SUPPLIES,
   getCycleDuration,
-  getDefaultRoute,
   getEncounterName,
-  getRouteOptions,
   ROUTES,
 } from "./encounters";
+import { generateSectorMap, getReachableNodes, getSectorIndex, getSectorNode } from "./sectorMap";
 import { addMessage, addToPool, createEmptyPool, getBotStagingPosition } from "./utils";
 
 interface CreateRunStateOptions {
@@ -125,6 +124,8 @@ export function createRunState(
 ): RunState {
   const discovery: DiscoveryLog = JSON.parse(JSON.stringify(saveData.discovery));
   const firstMission = isFirstMission({ cycle: 1, meta: saveData.meta });
+  const sector = generateSectorMap(0, Math.floor(Math.random() * 2 ** 31), firstMission);
+  const firstNode = sector.columns[0][0];
   return {
     phase,
     cycle: 1,
@@ -155,8 +156,8 @@ export function createRunState(
       epicInventory: createEmptyEpicInventory(),
       botCapacityBase: 4,
     },
-    simulation: createSimulationState(1, getDefaultRoute(1), firstMission),
-    routeOptions: getRouteOptions(1, firstMission),
+    simulation: createSimulationState(1, firstNode.route, firstMission),
+    sector,
     summary: undefined,
     pendingReward: undefined,
     ui: {
@@ -198,8 +199,23 @@ export function resetForNextCycle(state: RunState): void {
     bot.contribution = { mined: 0, damage: 0, healing: 0, salvage: 0 };
   });
   state.missionPrep.modulesPlacedThisMission = 0;
-  state.routeOptions = getRouteOptions(state.cycle, false);
-  state.simulation = createSimulationState(state.cycle, state.routeOptions[0], false);
+  const sectorIndex = getSectorIndex(state.cycle);
+  if (sectorIndex !== state.sector.index) {
+    state.sector = generateSectorMap(sectorIndex, state.sector.seed, false);
+  }
+  const nextNode = getReachableNodes(state)[0];
+  state.sector.selectedNodeId = nextNode.id;
+  state.simulation = createSimulationState(state.cycle, nextNode.route, false);
+}
+
+export function selectNode(state: RunState, nodeId: string): boolean {
+  const node = getReachableNodes(state).find((candidate) => candidate.id === nodeId);
+  if (!node) {
+    return false;
+  }
+  state.sector.selectedNodeId = node.id;
+  selectRoute(state, node.route);
+  return true;
 }
 
 export function selectRoute(state: RunState, route: RouteId): void {
@@ -213,6 +229,9 @@ export function selectRoute(state: RunState, route: RouteId): void {
 export function prepareExecutionState(state: RunState): void {
   const preMissionDiscoveries = [...state.simulation.cycleStats.discoveries];
   const route = state.simulation.route;
+  if (getSectorNode(state.sector, state.sector.selectedNodeId) && !state.sector.path.includes(state.sector.selectedNodeId)) {
+    state.sector.path.push(state.sector.selectedNodeId);
+  }
 
   state.phase = "execution";
   state.paused = false;
