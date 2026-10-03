@@ -6,6 +6,7 @@ import type { BotInstance, ModuleId, RunState, SaveData, ShipSlot } from "../typ
 import { createRunState, prepareExecutionState, resetForNextCycle, selectNode } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
 import { isLaunchPortUnlocked } from "./hangar";
+import { advanceDialog, chooseDialog, isCampaignFinale, parseSeed, restoreCheckpoint } from "./story";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
 import {
   addMessage,
@@ -84,10 +85,43 @@ function getSelectedMergeModules(state: RunState): ModuleId[] | undefined {
   return slots.map((slot) => slot.moduleId!);
 }
 
+function withProgress(state: RunState, saveData: SaveData): SaveData {
+  return { ...saveData, discovery: state.discovery, meta: state.meta, onboarding: state.onboarding, campaign: state.campaign };
+}
+
 export function processCommand(state: RunState, command: GameCommand, saveData: SaveData): RunState {
   switch (command.type) {
     case "start_new_run": {
-      return createRunState(saveData, "planning");
+      return createRunState(withProgress(state, saveData), "planning", { mode: state.mode });
+    }
+    case "start_campaign": {
+      if (!command.fresh) {
+        const restored = restoreCheckpoint(state);
+        if (restored) {
+          return restored;
+        }
+      }
+      return createRunState(withProgress(state, saveData), "planning", { mode: "campaign" });
+    }
+    case "start_roguelike": {
+      if (!state.campaign.roguelikeUnlocked) {
+        return state;
+      }
+      return createRunState(withProgress(state, saveData), "planning", { mode: "roguelike", seed: parseSeed(command.seed) });
+    }
+    case "retry_level": {
+      return state.mode === "campaign" && state.phase === "run_over" ? restoreCheckpoint(state) ?? state : state;
+    }
+    case "return_to_menu": {
+      return createRunState(withProgress(state, saveData), "menu");
+    }
+    case "advance_dialog": {
+      advanceDialog(state);
+      return state;
+    }
+    case "choose_dialog": {
+      chooseDialog(state, command.optionIndex);
+      return state;
     }
 
     case "toggle_pause": {
@@ -335,9 +369,13 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       return state;
     }
     case "continue_from_results": {
-      if (state.phase === "results" && !state.pendingReward && state.simulation.chests.length === 0) {
-        resetForNextCycle(state);
+      if (state.phase !== "results" || state.pendingReward || state.simulation.chests.length > 0 || state.story.dialog) {
+        return state;
       }
+      if (isCampaignFinale(state)) {
+        return createRunState(withProgress(state, saveData), "menu");
+      }
+      resetForNextCycle(state);
       return state;
     }
     default:

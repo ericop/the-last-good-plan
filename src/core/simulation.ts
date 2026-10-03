@@ -17,6 +17,7 @@ import type {
 import { noteRecipeSuccess } from "./discovery";
 import { createLaneEnemy, getCapitalShip, getLaneWaypoint, isCapitalShip, spawnWarship, tickCapitalShip } from "./encounters";
 import { createFighter, getPortLoadout, PORT_FIRST_LAUNCH_DELAY } from "./hangar";
+import { getHeroStation, recordCampaignClear, startOutroDialog, tickStory } from "./story";
 import {
   addMessage,
   addToPool,
@@ -49,6 +50,8 @@ const KNOCKBACK_TIME = 0.35;
 const ANNOUNCEMENT_TIME = 2.2;
 const CALLOUT_LIFETIME = 1.2;
 const QUICK_KILL_TIME = 20;
+const HERO_REGEN = 3;
+const HERO_ARMOR = 0.6;
 
 interface DamageSource {
   kind: "module" | "bot" | "fighter";
@@ -117,6 +120,11 @@ function removeDeadBots(state: RunState): void {
   state.simulation.fallenBots.push(...state.ship.bots.filter((bot) => bot.hp <= 0));
   state.ship.bots = state.ship.bots.filter((bot) => bot.hp > 0);
   state.simulation.cycleStats.lost.botsDestroyed += before - state.ship.bots.length;
+  const lostHero = state.simulation.fighters.find((fighter) => fighter.hero && fighter.hp <= 0);
+  if (lostHero?.hero) {
+    state.simulation.heroLost = true;
+    addMessage(state, `${lostHero.hero.name}'s ${lostHero.hero.shipName} went down.`);
+  }
   state.simulation.fighters = state.simulation.fighters.filter((fighter) => fighter.hp > 0);
 }
 
@@ -152,6 +160,9 @@ const KILLFEED_LENGTH = 6;
 function describeKiller(source: DamageSource): { name: string; color: number } {
   if (source.attackerBot) {
     return { name: source.attackerBot.name, color: source.attackerBot.color };
+  }
+  if (source.attackerFighter?.hero) {
+    return { name: source.attackerFighter.hero.name, color: source.attackerFighter.color };
   }
   if (source.attackerFighter) {
     const kind = source.attackerFighter.kind;
@@ -554,6 +565,9 @@ function applyFighterBehavior(state: RunState, fighter: FighterInstance, dt: num
   const startY = fighter.y;
   fighter.targetId = undefined;
   const speed = fighter.speed * (fighter.launchBoost > 0 ? LAUNCH_BOOST_SPEED_MULTIPLIER : 1);
+  if (fighter.hero && fighter.hp > 0) {
+    fighter.hp = Math.min(fighter.maxHp, fighter.hp + HERO_REGEN * dt);
+  }
   fighter.launchBoost = Math.max(0, fighter.launchBoost - dt);
   if (followEvade(fighter, fighter.speed, dt)) {
     updateFighterHeading(fighter, startX, startY);
@@ -583,6 +597,16 @@ function applyFighterBehavior(state: RunState, fighter: FighterInstance, dt: num
       } else {
         healShip(state, heal);
       }
+    }
+  } else if (fighter.hero) {
+    const station = getHeroStation();
+    moveToward(fighter, { x: station.x + Math.sin(state.simulation.elapsed * 0.8) * 30, y: station.y }, speed, dt);
+    const target = state.simulation.enemies
+      .filter((enemy) => enemy.hp > 0 && distance(enemy, fighter) <= fighter.range)
+      .sort((left, right) => distance(left, fighter) - distance(right, fighter))[0];
+    if (target) {
+      fighter.targetId = target.id;
+      damageEnemy(state, target, fighter.attack * dt, { kind: "fighter", attackerFighter: fighter });
     }
   } else {
     const nearShip = state.simulation.enemies
@@ -684,7 +708,7 @@ function tickBarrages(state: RunState, dt: number): boolean {
       barrage.firedAge += dt;
       return barrage.firedAge < BARRAGE_FLASH_TIME;
     }
-    if (!state.simulation.enemies.some((enemy) => enemy.id === barrage.sourceId && enemy.hp > 0)) {
+    if (!barrage.doom && !state.simulation.enemies.some((enemy) => enemy.id === barrage.sourceId && enemy.hp > 0)) {
       return false;
     }
 
@@ -746,7 +770,7 @@ function applyEnemyBehavior(state: RunState, dt: number): void {
     if (engageFighter) {
       moveToward(enemy, targetFighter, enemy.speed, dt);
       if (distance(enemy, targetFighter) <= enemy.range) {
-        targetFighter.hp = Math.max(0, targetFighter.hp - enemy.attack * dt);
+        targetFighter.hp = Math.max(0, targetFighter.hp - enemy.attack * dt * (targetFighter.hero ? HERO_ARMOR : 1));
       }
       continue;
     }
@@ -913,15 +937,20 @@ function finalizeCycle(state: RunState): void {
   }
 
   state.meta.totalCyclesCompleted += 1;
-  const survived = state.ship.hull > 0;
+  const survived = state.ship.hull > 0 && !state.simulation.heroLost;
+  const lostHero = state.simulation.heroLost;
   const stars = scoreStars(state, survived);
   state.meta.totalStars = (state.meta.totalStars ?? 0) + stars.filter((star) => star.earned).length;
   if (survived && state.simulation.encounter === "duel" && !state.simulation.warshipDefeated) {
     addMessage(state, "The warship disengaged before it broke.");
   }
   state.summary = {
-    title: survived ? `Mission ${state.cycle} complete – ${state.simulation.encounterName}` : "The plan failed",
-    text: survived ? getDebriefText(state) : "Hull collapse ended the run. The debrief below should still tell you what almost worked.",
+    title: survived ? `Mission ${state.cycle} complete – ${state.simulation.encounterName}` : lostHero ? "Escort lost" : "The plan failed",
+    text: survived
+      ? getDebriefText(state)
+      : lostHero
+        ? "Your escort went down. Retry the level and keep them closer to the ship."
+        : "Hull collapse ended the run. The debrief below should still tell you what almost worked.",
     gains: roundPool(state.simulation.cycleStats.gained),
     losses: state.simulation.cycleStats.lost,
     discoveries: [...state.simulation.cycleStats.discoveries],
@@ -930,8 +959,12 @@ function finalizeCycle(state: RunState): void {
     stars,
     mvp: pickMvp(state),
   };
-  state.phase = state.ship.hull > 0 ? "results" : "run_over";
+  state.phase = survived ? "results" : "run_over";
   state.paused = false;
+  if (survived) {
+    recordCampaignClear(state);
+    startOutroDialog(state);
+  }
 }
 
 export function stepSimulation(state: RunState, dt: number): boolean {
@@ -950,6 +983,7 @@ export function stepSimulation(state: RunState, dt: number): boolean {
     state.ship.shield = 0;
   }
   ageAnnouncements(state, dt);
+  tickStory(state, dt);
 
   while (
     state.simulation.threatCursor < state.simulation.upcomingThreats.length &&
@@ -993,7 +1027,7 @@ export function stepSimulation(state: RunState, dt: number): boolean {
     majorUpdate = true;
   }
 
-  if (state.ship.hull <= 0) {
+  if (state.ship.hull <= 0 || state.simulation.heroLost) {
     finalizeCycle(state);
     return true;
   }

@@ -18,4 +18,10 @@ export type GameCommand =
   | { type: "replay_tutorial" }
   | { type: "choose_reward"; rewardKind: "artifact" | "epic_module"; rewardId: string }
   | { type: "choose_node"; nodeId: string }
+  | { type: "start_campaign"; fresh: boolean }
+  | { type: "start_roguelike"; seed?: string }
+  | { type: "retry_level" }
+  | { type: "return_to_menu" }
+  | { type: "advance_dialog" }
+  | { type: "choose_dialog"; optionIndex: number }
   | { type: "open_chest" };

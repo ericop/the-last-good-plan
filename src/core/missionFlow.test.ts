@@ -84,7 +84,7 @@ describe("full missions play to a debrief on every route", () => {
   for (const { route, cycle } of routes) {
     it(`finishes a ${route} mission with stars, a summary, and openable chests`, () => {
       const saveData = createSaveData();
-      const state = createRunState(saveData, "planning");
+      const state = createRunState(saveData, "planning", { mode: "roguelike" });
       state.cycle = cycle;
       selectRoute(state, route);
       buildSturdyShip(state, saveData);
@@ -105,7 +105,7 @@ describe("full missions play to a debrief on every route", () => {
 
   it("survives a multi-mission campaign of route picks, chests, and debriefs without breaking state", () => {
     const saveData = createSaveData(0);
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     buildSturdyShip(state, saveData);
     for (let mission = 0; mission < 6 && state.phase === "planning"; mission += 1) {
       const options = getReachableNodes(state);
@@ -129,7 +129,7 @@ describe("full missions play to a debrief on every route", () => {
 describe("sector map routes", () => {
   it("walks any path through a sector to the boss, then opens a fresh sector", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     for (let jump = 1; jump <= SECTOR_LENGTH; jump += 1) {
       const options = getReachableNodes(state);
       expect(options.length).toBeGreaterThan(0);
@@ -152,7 +152,7 @@ describe("sector map routes", () => {
 
   it("plays real missions along a sector path, beats the boss, and starts sector 2", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     buildSturdyShip(state, saveData);
     const visited: string[] = [];
     for (let jump = 1; jump <= SECTOR_LENGTH; jump += 1) {
@@ -176,7 +176,7 @@ describe("sector map routes", () => {
 
   it("only offers nodes linked from the last jump", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     const first = getReachableNodes(state)[0];
     processCommand(state, { type: "choose_node", nodeId: first.id }, saveData);
     prepareExecutionState(state);
@@ -187,7 +187,7 @@ describe("sector map routes", () => {
 
   it("ignores nodes that are not reachable", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     const before = state.sector.selectedNodeId;
     processCommand(state, { type: "choose_node", nodeId: state.sector.columns[SECTOR_LENGTH - 1][0].id }, saveData);
     expect(state.sector.selectedNodeId).toBe(before);
@@ -195,14 +195,14 @@ describe("sector map routes", () => {
   });
 
   it("runs the first-ever mission down a single lane", () => {
-    const state = createRunState(createSaveData(0), "planning");
+    const state = createRunState(createSaveData(0), "planning", { mode: "roguelike" });
     expect(state.simulation.lanes).toEqual([1]);
-    expect(createRunState(createSaveData(1), "planning").simulation.lanes).toEqual([0, 1, 2]);
+    expect(createRunState(createSaveData(1), "planning", { mode: "roguelike" }).simulation.lanes).toEqual([0, 1, 2]);
   });
 
   it("turns shields off and doubles scrap in the nebula", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     state.cycle = 4;
     selectRoute(state, "nebula");
     prepareExecutionState(state);
@@ -213,7 +213,7 @@ describe("sector map routes", () => {
   });
 
   it("hands out derelict supplies on arrival", () => {
-    const state = createRunState(createSaveData(), "planning");
+    const state = createRunState(createSaveData(), "planning", { mode: "roguelike" });
     state.cycle = 2;
     selectRoute(state, "derelict");
     const before = { ...state.resources };
@@ -227,7 +227,7 @@ describe("sector map routes", () => {
 describe("launch, chests, and debrief", () => {
   it("holds the clock during the launch countdown", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     buildSturdyShip(state, saveData);
     processCommand(state, { type: "begin_execution" }, saveData);
     stepSimulation(state, 1);
@@ -261,7 +261,7 @@ describe("launch, chests, and debrief", () => {
 
   it("scores stars and names an MVP", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     state.cycle = 2;
     selectRoute(state, "swarm");
     buildSturdyShip(state, saveData);
@@ -279,7 +279,7 @@ describe("launch, chests, and debrief", () => {
 describe("battle events", () => {
   it("records the killer in the killfeed", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     buildSturdyShip(state, saveData);
     playMission(state, saveData, 20);
     expect(state.simulation.killfeed.length).toBeGreaterThan(0);
@@ -288,7 +288,7 @@ describe("battle events", () => {
 
   it("calls out a perfect dodge and credits the dodger", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     state.cycle = 3;
     selectRoute(state, "duel");
     prepareExecutionState(state);
