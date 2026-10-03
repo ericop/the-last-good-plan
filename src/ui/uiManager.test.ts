@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { GameController } from "../core/gameController";
 import { createDefaultDiscoveryLog } from "../core/discovery";
 import { spawnWarship } from "../core/encounters";
+import { getReachableNodes } from "../core/sectorMap";
 import type { SaveData } from "../types/gameTypes";
 import { UIManager } from "./uiManager";
 
@@ -26,9 +27,9 @@ function mount(tutorialCompleted = true) {
   const controller = new GameController(createSaveData(tutorialCompleted));
   new UIManager(root, controller);
   const click = (selector: string) => {
-    const element = root.querySelector<HTMLElement>(selector);
+    const element = root.querySelector(selector);
     expect(element, `missing ${selector}`).not.toBeNull();
-    element!.click();
+    element!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   };
   return { root, controller, click };
 }
@@ -51,7 +52,7 @@ describe("UI renders every phase without breaking", () => {
     expect(root.dataset.layout).toBe("arena");
 
     startPlanning(controller);
-    expect(root.querySelector(".route-picker")).not.toBeNull();
+    expect(root.querySelector(".sector-map .sector-svg")).not.toBeNull();
     expect(root.querySelectorAll(".packet").length).toBeGreaterThanOrEqual(8);
     expect(root.querySelector("[data-action='begin-execution']")?.textContent).toContain("Launch");
     expect(root.querySelector(".side-rail .wave-timeline")).not.toBeNull();
@@ -78,13 +79,21 @@ describe("UI renders every phase without breaking", () => {
     expect(root.querySelector(".merge-strip")).toBeNull();
   });
 
-  it("switches routes from the sector map cards", () => {
+  it("renders the whole sector and picks the next jump from the map", () => {
     const { root, controller, click } = mount();
     startPlanning(controller);
-    const alternative = controller.getState().routeOptions[1];
-    click(`[data-action='choose-route'][data-route='${alternative}']`);
-    expect(controller.getState().simulation.route).toBe(alternative);
-    expect(root.querySelector(".route-card.selected")?.getAttribute("data-route")).toBe(alternative);
+    const state = controller.getState();
+    expect(root.querySelectorAll(".map-node")).toHaveLength(state.sector.columns.flat().length);
+    expect(root.querySelectorAll(".map-node.route-boss")).toHaveLength(1);
+
+    const options = getReachableNodes(state);
+    const alternative = options[options.length - 1];
+    if (options.length > 1) {
+      click(`[data-action='choose-node'][data-node='${alternative.id}']`);
+    }
+    expect(controller.getState().sector.selectedNodeId).toBe(alternative.id);
+    expect(controller.getState().simulation.route).toBe(alternative.route);
+    expect(root.querySelector(".map-node.selected")?.getAttribute("data-node") ?? alternative.id).toBe(alternative.id);
   });
 
   it("renders the scoreboard, launch card, lance alarm, and pause veil during battle", () => {

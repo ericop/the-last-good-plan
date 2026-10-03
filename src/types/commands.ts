@@ -1,4 +1,4 @@
-import type { DockPanelId, DoctrineId, FabricationOptionId, RouteId, UpgradeId } from "./gameTypes";
+import type { DockPanelId, DoctrineId, FabricationOptionId, UpgradeId } from "./gameTypes";
 
 export type GameCommand =
   | { type: "start_new_run" }
@@ -17,5 +17,5 @@ export type GameCommand =
   | { type: "skip_tutorial" }
   | { type: "replay_tutorial" }
   | { type: "choose_reward"; rewardKind: "artifact" | "epic_module"; rewardId: string }
-  | { type: "choose_route"; routeId: RouteId }
+  | { type: "choose_node"; nodeId: string }
   | { type: "open_chest" };

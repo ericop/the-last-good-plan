@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createRunState, prepareExecutionState, selectRoute } from "./createRunState";
+import { createRunState, prepareExecutionState, resetForNextCycle, selectRoute } from "./createRunState";
 import { createDefaultDiscoveryLog } from "./discovery";
-import { getRouteOptions, spawnWarship } from "./encounters";
+import { spawnWarship } from "./encounters";
+import { getReachableNodes, SECTOR_LENGTH } from "./sectorMap";
 import { processCommand } from "./processCommand";
 import { stepSimulation } from "./simulation";
 import type { ModuleId, RouteId, RunState, SaveData } from "../types/gameTypes";
@@ -107,9 +108,10 @@ describe("full missions play to a debrief on every route", () => {
     const state = createRunState(saveData, "planning");
     buildSturdyShip(state, saveData);
     for (let mission = 0; mission < 6 && state.phase === "planning"; mission += 1) {
-      const route = state.routeOptions[state.routeOptions.length - 1];
-      processCommand(state, { type: "choose_route", routeId: route }, saveData);
-      expect(state.simulation.route).toBe(route);
+      const options = getReachableNodes(state);
+      const node = options[options.length - 1];
+      processCommand(state, { type: "choose_node", nodeId: node.id }, saveData);
+      expect(state.simulation.route).toBe(node.route);
       playMission(state, saveData);
       expectSaneState(state);
       const phase = state.phase as RunState["phase"];
@@ -125,24 +127,71 @@ describe("full missions play to a debrief on every route", () => {
 });
 
 describe("sector map routes", () => {
-  it("offers only swarm on the very first mission and only the boss on boss cycles", () => {
-    expect(getRouteOptions(1, true)).toEqual(["swarm"]);
-    expect(getRouteOptions(10, false)).toEqual(["boss"]);
-  });
-
-  it("offers up to three distinct routes, led by the default rotation", () => {
-    expect(getRouteOptions(2, false)).toEqual(["swarm", "nebula", "derelict"]);
-    const duelCycle = getRouteOptions(6, false);
-    expect(duelCycle[0]).toBe("duel");
-    expect(new Set(duelCycle).size).toBe(duelCycle.length);
-    expect(duelCycle.length).toBe(3);
-  });
-
-  it("ignores routes that are not on offer", () => {
+  it("walks any path through a sector to the boss, then opens a fresh sector", () => {
     const saveData = createSaveData();
     const state = createRunState(saveData, "planning");
-    processCommand(state, { type: "choose_route", routeId: "boss" }, saveData);
-    expect(state.simulation.route).toBe("swarm");
+    for (let jump = 1; jump <= SECTOR_LENGTH; jump += 1) {
+      const options = getReachableNodes(state);
+      expect(options.length).toBeGreaterThan(0);
+      if (jump === SECTOR_LENGTH) {
+        expect(options.map((node) => node.route)).toEqual(["boss"]);
+      } else {
+        expect(options.some((node) => node.route === "boss")).toBe(false);
+      }
+      const pick = options[Math.floor(Math.random() * options.length)];
+      processCommand(state, { type: "choose_node", nodeId: pick.id }, saveData);
+      expect(state.simulation.route).toBe(pick.route);
+      prepareExecutionState(state);
+      state.phase = "results";
+      resetForNextCycle(state);
+    }
+    expect(state.cycle).toBe(SECTOR_LENGTH + 1);
+    expect(state.sector.index).toBe(1);
+    expect(state.sector.path).toEqual([]);
+  });
+
+  it("plays real missions along a sector path, beats the boss, and starts sector 2", () => {
+    const saveData = createSaveData();
+    const state = createRunState(saveData, "planning");
+    buildSturdyShip(state, saveData);
+    const visited: string[] = [];
+    for (let jump = 1; jump <= SECTOR_LENGTH; jump += 1) {
+      const options = getReachableNodes(state);
+      const pick = options[jump % options.length];
+      processCommand(state, { type: "choose_node", nodeId: pick.id }, saveData);
+      visited.push(pick.route);
+      state.ship.maxHull = 5000;
+      state.ship.hull = 5000;
+      playMission(state, saveData);
+      expect(state.phase).toBe("results");
+      openAllChests(state, saveData);
+      processCommand(state, { type: "continue_from_results" }, saveData);
+      state.resources = { solar: 999, minerals: 999, scrap: 999 };
+    }
+    expect(visited[visited.length - 1]).toBe("boss");
+    expect(state.cycle).toBe(SECTOR_LENGTH + 1);
+    expect(state.sector.index).toBe(1);
+    expect(getReachableNodes(state).every((node) => node.column === 0)).toBe(true);
+  });
+
+  it("only offers nodes linked from the last jump", () => {
+    const saveData = createSaveData();
+    const state = createRunState(saveData, "planning");
+    const first = getReachableNodes(state)[0];
+    processCommand(state, { type: "choose_node", nodeId: first.id }, saveData);
+    prepareExecutionState(state);
+    state.phase = "results";
+    resetForNextCycle(state);
+    expect(getReachableNodes(state).map((node) => node.id).sort()).toEqual([...first.next].sort());
+  });
+
+  it("ignores nodes that are not reachable", () => {
+    const saveData = createSaveData();
+    const state = createRunState(saveData, "planning");
+    const before = state.sector.selectedNodeId;
+    processCommand(state, { type: "choose_node", nodeId: state.sector.columns[SECTOR_LENGTH - 1][0].id }, saveData);
+    expect(state.sector.selectedNodeId).toBe(before);
+    expect(state.simulation.route).not.toBe("boss");
   });
 
   it("runs the first-ever mission down a single lane", () => {
@@ -155,7 +204,6 @@ describe("sector map routes", () => {
     const saveData = createSaveData();
     const state = createRunState(saveData, "planning");
     state.cycle = 4;
-    state.routeOptions = ["nebula"];
     selectRoute(state, "nebula");
     prepareExecutionState(state);
     state.simulation.launchCountdown = 0;

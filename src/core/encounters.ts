@@ -72,25 +72,6 @@ export function getDefaultRoute(cycle: number): RouteId {
   return getEncounterKind(cycle);
 }
 
-export function getRouteOptions(cycle: number, firstMission: boolean): RouteId[] {
-  if (isBossCycle(cycle)) {
-    return ["boss"];
-  }
-  if (firstMission) {
-    return ["swarm"];
-  }
-  const fallback = getDefaultRoute(cycle);
-  const extras = (cycle >= DUEL_CYCLE_INTERVAL
-    ? (["swarm", "duel", "nebula", "derelict"] as RouteId[])
-    : (["swarm", "nebula", "derelict"] as RouteId[])
-  ).filter((route) => route !== fallback);
-  const options: RouteId[] = [fallback];
-  for (let offset = 0; options.length < 3 && offset < extras.length; offset += 1) {
-    options.push(extras[(cycle + offset) % extras.length]);
-  }
-  return [...new Set(options)];
-}
-
 export function getEncounterName(cycle: number, route: RouteId = getDefaultRoute(cycle)): string {
   switch (route) {
     case "boss":

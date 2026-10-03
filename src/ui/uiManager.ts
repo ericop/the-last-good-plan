@@ -8,6 +8,7 @@ import type { GameController } from "../core/gameController";
 import { getDiscoveryDescriptor, getMergePreviewFromModules } from "../core/discovery";
 import { getWarshipForCycle, ROUTES } from "../core/encounters";
 import { isLaunchPortUnlocked } from "../core/hangar";
+import { getReachableNodes, SECTOR_LENGTH } from "../core/sectorMap";
 import { getMissionReadiness, getPhaseLabel, getTutorialHandTarget, getTutorialStepView } from "../core/tutorial";
 import { canAfford, getArtifactById, getBotCapacity, getBotDodge, getSlotById } from "../core/utils";
 import type {
@@ -18,6 +19,7 @@ import type {
   ResourcePool,
   RouteId,
   RunState,
+  SectorNode,
   ShipWeaponDefinition,
   UpgradeId,
 } from "../types/gameTypes";
@@ -64,6 +66,10 @@ const RESOURCE_IDS: ResourceId[] = ["solar", "minerals", "scrap"];
 const HULL_HIT_FLASH_MS = 350;
 const DELTA_FLUSH_MS = 450;
 const COUNT_UP_MS = 900;
+const MAP_COLUMN_WIDTH = 74;
+const MAP_PADDING_X = 26;
+const MAP_TOP = 6;
+const MAP_ROW_SPAN = 84;
 
 const ICONS: Record<string, string> = {
   solar: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></g></svg>`,
@@ -322,8 +328,8 @@ export class UIManager {
       case "toggle-fast-forward":
         this.controller.dispatch({ type: "toggle_execution_speed" });
         break;
-      case "choose-route":
-        this.controller.dispatch({ type: "choose_route", routeId: actionElement.dataset.route as RouteId });
+      case "choose-node":
+        this.controller.dispatch({ type: "choose_node", nodeId: actionElement.dataset.node! });
         break;
       case "open-chest":
         haptic(25);
@@ -382,7 +388,9 @@ export class UIManager {
       this.setSectionHtml("railKills", this.railKills, this.renderKillfeed(state));
     }
     this.setSectionHtml("hud", this.hudStrip, this.renderHud(state));
-    this.setSectionHtml("header", this.matchHeader, inRun ? this.renderMatchHeader(state) : "");
+    if (this.setSectionHtml("header", this.matchHeader, inRun ? this.renderMatchHeader(state) : "")) {
+      this.centerSectorMap();
+    }
     this.setSectionHtml("overlay", this.battleOverlay, inRun ? this.renderBattleOverlay(state) : this.renderMenuCard(state));
     this.setSectionHtml("tray", this.tray, inRun ? this.renderTray(state) : "");
     this.setSectionHtml("dockNav", this.dockNav, inRun ? this.renderDockNav(state) : "");
@@ -402,12 +410,24 @@ export class UIManager {
     this.runDebriefCountUp(state);
   }
 
-  private setSectionHtml(section: SectionId, element: HTMLElement, html: string): void {
+  private setSectionHtml(section: SectionId, element: HTMLElement, html: string): boolean {
     if (this.lastHtml.get(section) === html) {
-      return;
+      return false;
     }
     this.lastHtml.set(section, html);
     element.innerHTML = html;
+    return true;
+  }
+
+  private centerSectorMap(): void {
+    const scroller = this.matchHeader.querySelector<HTMLElement>(".sector-scroll");
+    const focus = scroller?.querySelector<SVGGElement>(".map-node.selected") ?? scroller?.querySelector<SVGGElement>(".map-node.current");
+    if (!scroller || !focus || scroller.scrollWidth <= scroller.clientWidth) {
+      return;
+    }
+    const focusBox = focus.getBoundingClientRect();
+    const scrollerBox = scroller.getBoundingClientRect();
+    scroller.scrollLeft += focusBox.left + focusBox.width / 2 - (scrollerBox.left + scrollerBox.width / 2);
   }
 
   private renderHud(state: RunState): string {
@@ -445,7 +465,7 @@ export class UIManager {
   private renderMatchHeader(state: RunState): string {
     if (state.phase === "planning") {
       this.lastHull = undefined;
-      return this.renderRoutePicker(state);
+      return this.renderSectorMap(state);
     }
 
     const simulation = state.simulation;
@@ -510,37 +530,89 @@ export class UIManager {
     `;
   }
 
-  private renderRoutePicker(state: RunState): string {
-    const selected = state.simulation.route;
-    const cards = state.routeOptions
-      .map((route) => `
-          <button class="route-card route-${route} ${route === selected ? "selected" : ""}" data-action="choose-route" data-route="${route}" ${state.routeOptions.length === 1 ? "disabled" : ""}>
-            <span class="route-silhouette">${ROUTE_SILHOUETTES[route]}</span>
-            <span class="route-copy">
-              <strong>${this.getRouteName(state, route)}</strong>
-              <small>${ROUTES[route].blurb}</small>
-            </span>
-          </button>
-        `)
+  private renderSectorMap(state: RunState): string {
+    const sector = state.sector;
+    const reachable = getReachableNodes(state);
+    const reachableIds = new Set(reachable.map((node) => node.id));
+    const current = sector.path[sector.path.length - 1];
+    const columnX = (column: number) => MAP_PADDING_X + column * MAP_COLUMN_WIDTH;
+    const nodeY = (node: SectorNode) => MAP_TOP + ((node.row + 0.5) / node.rows) * MAP_ROW_SPAN;
+    const nodes = sector.columns.flat();
+
+    const edges = nodes
+      .flatMap((node) =>
+        node.next.map((nextId) => {
+          const target = nodes.find((candidate) => candidate.id === nextId)!;
+          const taken = sector.path.includes(node.id) && sector.path.includes(target.id);
+          const planned = node.id === current && target.id === sector.selectedNodeId;
+          const open = node.id === current && reachableIds.has(target.id);
+          const kind = taken ? "taken" : planned ? "planned" : open ? "open" : "";
+          return `<line class="map-edge ${kind}" x1="${columnX(node.column)}" y1="${nodeY(node)}" x2="${columnX(target.column)}" y2="${nodeY(target)}" />`;
+        }),
+      )
       .join("");
 
+    const nodeMarkup = nodes
+      .map((node) => {
+        const visited = sector.path.includes(node.id);
+        const status = [
+          visited ? "visited" : "",
+          node.id === current ? "current" : "",
+          reachableIds.has(node.id) ? "reachable" : "",
+          node.id === sector.selectedNodeId ? "selected" : "",
+          !visited && !reachableIds.has(node.id) && node.column < (state.cycle - 1) % SECTOR_LENGTH ? "skipped" : "",
+        ].join(" ");
+        const boss = node.route === "boss";
+        const radius = boss ? 19 : 13;
+        const iconWidth = boss ? 28 : 20;
+        const silhouette = ROUTE_SILHOUETTES[node.route].replace(
+          "<svg ",
+          `<svg x="${-iconWidth / 2}" y="${-iconWidth / 3}" width="${iconWidth}" height="${(iconWidth * 2) / 3}" `,
+        );
+        const action = reachableIds.has(node.id) && reachable.length > 1 ? `data-action="choose-node" data-node="${node.id}"` : "";
+        return `
+          <g class="map-node route-${node.route} ${status}" transform="translate(${columnX(node.column)} ${nodeY(node)})" ${action}>
+            <title>${this.getRouteName(node.cycle, node.route)}: ${ROUTES[node.route].blurb}</title>
+            <circle r="${radius + 9}" class="map-hit" />
+            <circle r="${radius}" class="map-disc" />
+            ${silhouette}
+          </g>
+        `;
+      })
+      .join("");
+
+    const labels = sector.columns
+      .map((column, index) => {
+        const label = index === SECTOR_LENGTH - 1 ? "BOSS" : String(column[0].cycle);
+        return `<text class="map-label ${index === (state.cycle - 1) % SECTOR_LENGTH ? "now" : ""}" x="${columnX(index)}" y="${MAP_TOP + MAP_ROW_SPAN + 16}">${label}</text>`;
+      })
+      .join("");
+
+    const width = MAP_PADDING_X * 2 + (SECTOR_LENGTH - 1) * MAP_COLUMN_WIDTH;
+    const height = MAP_TOP + MAP_ROW_SPAN + 22;
+    const choosing = reachable.length > 1;
     return `
-      <div class="route-picker">
+      <div class="sector-map">
         <div class="route-heading">
-          <span class="eyebrow">${state.routeOptions.length > 1 ? "Choose your next jump" : "Next up"}</span>
+          <span class="eyebrow">Sector ${sector.index + 1} · ${choosing ? "Choose your next jump" : "Next up"}</span>
+          <strong class="route-name">${state.simulation.encounterName}</strong>
           <span class="route-intel">${this.renderRouteIntel(state)}</span>
         </div>
-        <div class="route-cards">${cards}</div>
+        <div class="sector-scroll">
+          <svg class="sector-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Sector map">
+            ${edges}${nodeMarkup}${labels}
+          </svg>
+        </div>
       </div>
     `;
   }
 
-  private getRouteName(state: RunState, route: RouteId): string {
+  private getRouteName(cycle: number, route: RouteId): string {
     switch (route) {
       case "duel":
-        return `Ship Duel: ${getWarshipForCycle(state.cycle).name}`;
+        return `Ship Duel: ${getWarshipForCycle(cycle).name}`;
       case "boss":
-        return `Boss: ${getBossForCycle(state.cycle).name}`;
+        return `Boss: ${getBossForCycle(cycle).name}`;
       case "nebula":
         return "Nebula Run";
       case "derelict":

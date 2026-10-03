@@ -38,8 +38,9 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
 - Booster module: each Booster merged into a bot gives 33% dodge (66% with two). Placed on the ship, it pulses
   nearby small enemies back down their lanes
 - Booster trails and the charge-shot warning are ported from [Rainbow-Survivors](https://github.com/ericop/Rainbow-Survivors)
-- Sector map: pick your next jump between Swarm, Ship Duel, Nebula Run (no shields, double scrap) and Derelict
-  Salvage (lighter fight, free supplies). Every 10th jump is a boss
+- Sector map: an FTL-style branching map of 10 jumps per sector. Each jump links forward to one or two others, so
+  your route decides your choices: Swarm, Ship Duel, Nebula Run (no shields, double scrap) or Derelict Salvage
+  (lighter fight, free supplies). Every path converges on a boss at jump 10, then a fresh sector begins
 - Two native layouts over one game: a portrait phone layout with the battlefield turned so enemies come down toward
   your ship, and a desktop "arena" layout with hotkeys, fleet frames, a wave timeline and a killfeed
 - Mission debrief with 1 to 3 stars, count-up rewards, an MVP bot, and every chest collected during the fight

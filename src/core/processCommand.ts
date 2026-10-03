@@ -3,7 +3,7 @@ import { MODULE_DEFINITIONS } from "../data/modules";
 import { UPGRADE_DEFINITIONS } from "../data/upgrades";
 import type { GameCommand } from "../types/commands";
 import type { BotInstance, ModuleId, RunState, SaveData, ShipSlot } from "../types/gameTypes";
-import { createRunState, prepareExecutionState, resetForNextCycle, selectRoute } from "./createRunState";
+import { createRunState, prepareExecutionState, resetForNextCycle, selectNode } from "./createRunState";
 import { getMergePreviewFromModules, noteRecipeUse } from "./discovery";
 import { isLaunchPortUnlocked } from "./hangar";
 import { getMissionReadiness, skipTutorial } from "./tutorial";
@@ -318,12 +318,13 @@ export function processCommand(state: RunState, command: GameCommand, saveData: 
       recalculateShipStats(state);
       return state;
     }
-    case "choose_route": {
-      if (state.phase !== "planning" || !state.routeOptions.includes(command.routeId) || state.simulation.route === command.routeId) {
+    case "choose_node": {
+      if (state.phase !== "planning" || state.sector.selectedNodeId === command.nodeId) {
         return state;
       }
-      selectRoute(state, command.routeId);
-      addMessage(state, `Course set: ${state.simulation.encounterName}.`);
+      if (selectNode(state, command.nodeId)) {
+        addMessage(state, `Course set: ${state.simulation.encounterName}.`);
+      }
       return state;
     }
     case "open_chest": {

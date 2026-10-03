@@ -279,6 +279,24 @@ export interface ThreatWave {
   warshipId?: string;
 }
 
+export interface SectorNode {
+  id: string;
+  column: number;
+  row: number;
+  rows: number;
+  cycle: number;
+  route: RouteId;
+  next: string[];
+}
+
+export interface SectorMap {
+  index: number;
+  seed: number;
+  columns: SectorNode[][];
+  path: string[];
+  selectedNodeId: string;
+}
+
 export interface Callout {
   text: string;
   x: number;
@@ -534,7 +552,7 @@ export interface RunState {
   onboarding: OnboardingProgress;
   tutorial: TutorialState;
   missionPrep: MissionPrepState;
-  routeOptions: RouteId[];
+  sector: SectorMap;
 }
 
 export interface SaveData {
