@@ -35,6 +35,11 @@ export function loadSaveData(): SaveData {
       onboarding: {
         tutorialCompleted: parsed.onboarding?.tutorialCompleted ?? true,
       },
+      campaign: {
+        highestLevelCleared: 0,
+        roguelikeUnlocked: false,
+        ...(parsed.campaign ?? {}),
+      },
     };
   } catch {
     return defaults;

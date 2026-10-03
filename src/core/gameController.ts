@@ -81,6 +81,7 @@ export class GameController {
     this.saveData.discovery = JSON.parse(JSON.stringify(this.state.discovery));
     this.saveData.meta = { ...this.state.meta };
     this.saveData.onboarding = { ...this.state.onboarding };
+    this.saveData.campaign = { ...this.state.campaign };
     saveProgress(this.saveData);
   }
 

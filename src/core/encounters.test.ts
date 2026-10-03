@@ -18,7 +18,7 @@ function createSaveData(): SaveData {
 }
 
 function createExecutionState(cycle: number): RunState {
-  const state = createRunState(createSaveData(), "planning");
+  const state = createRunState(createSaveData(), "planning", { mode: "roguelike" });
   state.cycle = cycle;
   selectRoute(state, getDefaultRoute(cycle));
   prepareExecutionState(state);
@@ -100,7 +100,7 @@ describe("ship duels", () => {
 describe("carrier launch ports", () => {
   it("cannot be built until Hangar Tech is researched", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
 
     processCommand(state, { type: "select_fabrication_module", moduleId: "launch_port" }, saveData);
     processCommand(state, { type: "board_slot_pressed", slotId: "slot_0_0" }, saveData);
@@ -146,7 +146,7 @@ describe("carrier launch ports", () => {
 
   it("refuses to merge a launch port into a bot", () => {
     const saveData = createSaveData();
-    const state = createRunState(saveData, "planning");
+    const state = createRunState(saveData, "planning", { mode: "roguelike" });
     slot(state, "slot_0_0").moduleId = "launch_port";
     slot(state, "slot_0_1").moduleId = "solar_collector";
     state.ui.selectedSlotIds = ["slot_0_0", "slot_0_1"];

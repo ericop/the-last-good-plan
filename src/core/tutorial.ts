@@ -202,7 +202,7 @@ export function getMissionReadiness(state: RunState): { ready: boolean; reason: 
 }
 
 export function getTutorialStepView(state: RunState): TutorialStepView | undefined {
-  if (!state.tutorial.active) {
+  if (!state.tutorial.active || state.story.dialog) {
     return undefined;
   }
   if (state.tutorial.stepId === "mission_results" && state.phase !== "results" && state.phase !== "run_over") {
@@ -215,7 +215,16 @@ export function getTutorialStepView(state: RunState): TutorialStepView | undefin
 }
 
 export function isTutorialCommandAllowed(state: RunState, command: GameCommand): boolean {
-  if (!state.tutorial.active || command.type === "start_new_run") {
+  const alwaysAllowed: GameCommand["type"][] = [
+    "start_new_run",
+    "advance_dialog",
+    "choose_dialog",
+    "retry_level",
+    "return_to_menu",
+    "start_campaign",
+    "start_roguelike",
+  ];
+  if (!state.tutorial.active || alwaysAllowed.includes(command.type)) {
     return true;
   }
 

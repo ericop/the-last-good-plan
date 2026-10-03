@@ -3,6 +3,7 @@ import { createEmptyEpicInventory } from "../data/epicModuleRegistry";
 import type {
   BotInstance,
   DiscoveryLog,
+  GameMode,
   RouteId,
   RunState,
   SaveData,
@@ -18,10 +19,13 @@ import {
   ROUTES,
 } from "./encounters";
 import { generateSectorMap, getReachableNodes, getSectorIndex, getSectorNode } from "./sectorMap";
+import { applyCampaignLevel, armMissionStory, captureCheckpoint, createCampaignMap, SEED_SPACE, startIntroDialog } from "./story";
 import { addMessage, addToPool, createEmptyPool, getBotStagingPosition } from "./utils";
 
 interface CreateRunStateOptions {
   forceTutorial?: boolean;
+  mode?: GameMode;
+  seed?: number;
 }
 
 function createSlots(): ShipSlot[] {
@@ -71,6 +75,13 @@ export function createSimulationState(cycle: number, route: RouteId, firstMissio
     announcement: undefined,
     dodgesByUnit: {},
     fallenBots: [],
+    storyFired: [],
+    storyEvents: [],
+    commQueue: [],
+    activeComm: undefined,
+    heroLost: false,
+    rescueArmed: undefined,
+    rescue: undefined,
     startingHull: 0,
     upcomingThreats: createCycleThreatSchedule(cycle, route),
     threatCursor: 0,
@@ -124,9 +135,11 @@ export function createRunState(
 ): RunState {
   const discovery: DiscoveryLog = JSON.parse(JSON.stringify(saveData.discovery));
   const firstMission = isFirstMission({ cycle: 1, meta: saveData.meta });
-  const sector = generateSectorMap(0, Math.floor(Math.random() * 2 ** 31), firstMission);
+  const mode = options.mode ?? "campaign";
+  const sector =
+    mode === "campaign" ? createCampaignMap() : generateSectorMap(0, options.seed ?? Math.floor(Math.random() * SEED_SPACE), false);
   const firstNode = sector.columns[0][0];
-  return {
+  const state: RunState = {
     phase,
     cycle: 1,
     paused: false,
@@ -173,7 +186,22 @@ export function createRunState(
     missionPrep: {
       modulesPlacedThisMission: 0,
     },
+    mode,
+    story: { introSeen: [] },
+    campaign: { highestLevelCleared: 0, roguelikeUnlocked: false, ...saveData.campaign },
   };
+  if (phase === "planning") {
+    beginPlanning(state);
+  }
+  return state;
+}
+
+function beginPlanning(state: RunState): void {
+  applyCampaignLevel(state);
+  if (state.mode === "campaign") {
+    startIntroDialog(state);
+    captureCheckpoint(state);
+  }
 }
 
 export function resetForNextCycle(state: RunState): void {
@@ -206,6 +234,7 @@ export function resetForNextCycle(state: RunState): void {
   const nextNode = getReachableNodes(state)[0];
   state.sector.selectedNodeId = nextNode.id;
   state.simulation = createSimulationState(state.cycle, nextNode.route, false);
+  beginPlanning(state);
 }
 
 export function selectNode(state: RunState, nodeId: string): boolean {
@@ -224,6 +253,7 @@ export function selectRoute(state: RunState, route: RouteId): void {
   state.simulation = createSimulationState(state.cycle, route, isFirstMission(state));
   state.simulation.cycleStats.discoveries = discoveries;
   state.simulation.messageLog = messages;
+  applyCampaignLevel(state);
 }
 
 export function prepareExecutionState(state: RunState): void {
@@ -255,6 +285,8 @@ export function prepareExecutionState(state: RunState): void {
   });
   state.simulation = createSimulationState(state.cycle, route, isFirstMission(state));
   state.simulation.cycleStats.discoveries = preMissionDiscoveries;
+  applyCampaignLevel(state);
+  armMissionStory(state);
   state.simulation.launchCountdown = LAUNCH_COUNTDOWN;
   state.simulation.messageLog = [
     `${state.simulation.encounterName} started. Bots are running at 150% efficiency while commitment holds.`,

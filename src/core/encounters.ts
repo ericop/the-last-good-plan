@@ -199,7 +199,13 @@ export function getLaneWaypoint(enemy: EnemyInstance): { x: number; y: number } 
 const BEAM_LENGTH = 900;
 const BEAM_EMITTER_OFFSET = 58;
 
+const ESCORT_TARGET_CHANCE = 0.5;
+
 function pickBarrageAim(state: RunState, enemy: EnemyInstance): { x: number; y: number } {
+  const escort = state.simulation.fighters.find((fighter) => fighter.hero && fighter.hp > 0);
+  if (escort && Math.random() < ESCORT_TARGET_CHANCE) {
+    return { x: escort.x, y: escort.y };
+  }
   const units = [...state.ship.bots, ...state.simulation.fighters].filter(
     (unit) => unit.hp > 0 && distance(unit, enemy) > BEAM_EMITTER_OFFSET + 12,
   );

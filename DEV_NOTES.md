@@ -48,10 +48,25 @@ The key future-proofing choice is that UI and scene input never mutate gameplay 
   `pendingReward` during the debrief, and `continue_from_results` refuses to advance until the queue is empty.
 - `finalizeCycle` scores `summary.stars` and `summary.mvp` (fallen bots are eligible).
 
+## Campaign and Story
+
+- `state.mode` is `campaign` (default) or `roguelike` (Uncharted, unlocked by `campaign.roguelikeUnlocked`).
+- All script lives in `src/data/story.ts`: speakers, the ten `CAMPAIGN_LEVELS` (route, intro dialog with choices,
+  timed comm events, outro, optional escort, rescue, and extra waves), alien rescue lines, and Uncharted bulletins.
+- `src/core/story.ts` runs it. `applyCampaignLevel` renames the encounter, swaps in the authored warship, and adds
+  extra waves whenever a campaign simulation is built. `armMissionStory` adds the escort and arms rescues at launch
+  (in Uncharted it rolls seeded bulletins and rescues). `tickStory` fires timed comms (choosing `byTag` lines from
+  the intro choice), locks the doom lance, and triggers the rescue.
+- Dialog is `state.story.dialog`, advanced by `advance_dialog` and `choose_dialog`; it blocks
+  `continue_from_results` and hides the tutorial bubble while open.
+- A campaign checkpoint (a JSON snapshot of the run) is saved at the start of every level in
+  `state.campaign.checkpoint` and persisted with the save; `retry_level` and "Continue" restore it.
+
 ## Tests
 
 - `npm run test` runs everything. `src/core/missionFlow.test.ts` plays whole missions on every route headlessly and is
-  the first place to look when a sim change breaks something. `src/ui/uiManager.test.ts` renders the real DOM UI under
+  the first place to look when a sim change breaks something. `src/core/story.test.ts` checks the script and plays
+  the entire campaign end to end. `src/ui/uiManager.test.ts` renders the real DOM UI under
   happy-dom through every phase and both layouts.
 
 ## Carrier Launch Ports

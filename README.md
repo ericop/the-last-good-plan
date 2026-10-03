@@ -27,6 +27,16 @@ Commit to a strategy, let your systems run, and watch your ship either stabilize
 - Commitment bonus that starts at +50% and drops by 10% per doctrine change during execution
 - 3x3 ship board with adjacency-aware merges
 - Six base modules and ten merge outcomes
+- Story campaign: ten hand-built levels across Sector 1. The Governor of Halcyon "gently" relocated your parents to
+  the stars, so you, Pip, Rook, and Mars borrow a mining hauler to bring them home
+  - Dialog before and after each level, with choices that change your friends' replies (never the main story)
+  - Escort levels where a friend's ship flies beside yours and must survive
+  - Governor check-ins with news from home and clues about where your parents went
+  - In a few moments of certain doom, a passing alien species saves the day, asks nothing back, and tells you to
+    do the same for someone else
+  - Lose a level and retry it from that level's checkpoint; progress is saved between sessions
+- Uncharted: beat the campaign to unlock the seeded roguelike. Branching sectors, a boss every tenth jump, and a
+  6-character seed you can share; story bulletins and good-neighbor rescues can turn up along the way
 - Discovery log with unknown, discovered, and known/mastered-lite states
 - Three encounter types that rotate by mission:
   - Swarm Defense: tower-defense style streams of darts, scavengers, and brutes marching down three lanes, ending in a mini-boss

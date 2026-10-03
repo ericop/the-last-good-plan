@@ -23,7 +23,11 @@ direction. The chosen direction is **Hybrid Bridge** (variant C): one sim, a por
 - **New commands must pass the tutorial gate.** `isTutorialCommandAllowed` in `src/core/tutorial.ts` silently drops
   commands a tutorial step does not list. Add new commands to the steps where they are reachable.
 - **Never pause mid-mission for a choice.** Rewards found during a fight go to `simulation.chests` and open at the
-  debrief.
+  debrief. Story beats during a fight are non-blocking comm messages; dialog with choices happens between levels.
+- **Runs default to campaign mode.** Tests about general mechanics should create runs with `{ mode: "roguelike" }`,
+  or they will hit level renames and intro dialog.
+- **Story script is data.** Edit `src/data/story.ts`; `story.test.ts` rejects unknown speakers, unreachable choice
+  tags, and em dashes in dialog.
 - **All HUD text lives in the DOM**, never in the canvas, so it stays readable at phone scale.
 - **Everything in `RunScene` goes inside `this.world`.** Portrait phones rotate that container by -90° and swap the
   game size to 640×960; the sim keeps landscape coordinates. New texts need `setRotation(-this.world.rotation)`.
@@ -44,6 +48,8 @@ direction. The chosen direction is **Hybrid Bridge** (variant C): one sim, a por
 - **Module:** `ModuleId` in `src/types/gameTypes.ts`, `MODULE_DEFINITIONS`, and if mergeable `MODULE_ORDER`,
   `MODULE_TRAITS`, and `countModules` in `src/data/merges.ts`; `moduleCounts` in `tutorial.ts`; `TRAY_LABELS` in
   `uiManager.ts`. The recipe count in `mergeSystem.test.ts` is pairs + trios + doubled trios (98 for 7 modules).
+- **Campaign level beat:** add a timed event to the level in `src/data/story.ts`; use `byTag` to vary it by the
+  intro choice.
 - **Warship:** append to `src/data/warships.ts`. **Route:** `ROUTES` in `src/core/encounters.ts`, plus its weight
   in `pickRoute` in `src/core/sectorMap.ts` so it appears on the map.
 

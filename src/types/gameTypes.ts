@@ -287,6 +287,78 @@ export interface SectorNode {
   cycle: number;
   route: RouteId;
   next: string[];
+  title?: string;
+}
+
+export type GameMode = "campaign" | "roguelike";
+export type SpeakerId =
+  | "you"
+  | "pip"
+  | "rook"
+  | "mars"
+  | "ship"
+  | "governor"
+  | "interim"
+  | "corsair"
+  | "patrol"
+  | "warden"
+  | "glimmerfolk"
+  | "aunties"
+  | "tide"
+  | "choir";
+
+export interface DialogLine {
+  speaker: SpeakerId;
+  text: string;
+}
+
+export interface DialogOption {
+  label: string;
+  tag: string;
+  reply: DialogLine[];
+}
+
+export interface DialogScene {
+  lines: DialogLine[];
+  choice?: { options: DialogOption[] };
+  after?: DialogLine[];
+}
+
+export interface ActiveDialog {
+  lines: DialogLine[];
+  index: number;
+  options?: DialogOption[];
+  after: DialogLine[];
+}
+
+export interface StoryState {
+  dialog?: ActiveDialog;
+  choiceTag?: string;
+  introSeen: number[];
+}
+
+export interface CampaignProgress {
+  highestLevelCleared: number;
+  roguelikeUnlocked: boolean;
+  checkpoint?: string;
+}
+
+export interface TimedStoryEvent {
+  id: string;
+  at?: number;
+  afterRescue?: boolean;
+  lines?: DialogLine[];
+  byTag?: Record<string, DialogLine[]>;
+}
+
+export interface CommMessage {
+  line: DialogLine;
+  timer: number;
+}
+
+export interface RescueState {
+  species: SpeakerId;
+  age: number;
 }
 
 export interface SectorMap {
@@ -367,6 +439,7 @@ export interface FighterInstance {
   launchBoost: number;
   targetId?: string;
   evade?: EvadeOrder;
+  hero?: { name: string; shipName: string; speaker: SpeakerId };
 }
 
 export interface BarrageState {
@@ -384,6 +457,7 @@ export interface BarrageState {
   firedAge?: number;
   noticed: string[];
   evaders: string[];
+  doom?: boolean;
 }
 
 export interface ImpactEffect {
@@ -491,6 +565,20 @@ export interface SimulationState {
   announcement?: { text: string; timer: number };
   dodgesByUnit: Record<string, number>;
   fallenBots: BotInstance[];
+  storyFired: string[];
+  storyEvents: TimedStoryEvent[];
+  commQueue: DialogLine[];
+  activeComm?: CommMessage;
+  heroLost: boolean;
+  rescueArmed?: {
+    species: SpeakerId;
+    hullTrigger: number;
+    minTime: number;
+    fallbackTime?: number;
+    doomTime?: number;
+    doomName?: string;
+  };
+  rescue?: RescueState;
   startingHull: number;
   upcomingThreats: ThreatWave[];
   threatCursor: number;
@@ -553,10 +641,14 @@ export interface RunState {
   tutorial: TutorialState;
   missionPrep: MissionPrepState;
   sector: SectorMap;
+  mode: GameMode;
+  story: StoryState;
+  campaign: CampaignProgress;
 }
 
 export interface SaveData {
   discovery: DiscoveryLog;
   meta: MetaProgress;
   onboarding: OnboardingProgress;
+  campaign?: CampaignProgress;
 }

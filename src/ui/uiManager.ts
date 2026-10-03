@@ -7,6 +7,8 @@ import { UPGRADE_DEFINITIONS } from "../data/upgrades";
 import type { GameController } from "../core/gameController";
 import { getDiscoveryDescriptor, getMergePreviewFromModules } from "../core/discovery";
 import { getWarshipForCycle, ROUTES } from "../core/encounters";
+import { CAMPAIGN_LENGTH, CAMPAIGN_LEVELS, SPEAKERS } from "../data/story";
+import { formatSeed, getCampaignLevel } from "../core/story";
 import { isLaunchPortUnlocked } from "../core/hangar";
 import { getReachableNodes, SECTOR_LENGTH } from "../core/sectorMap";
 import { getMissionReadiness, getPhaseLabel, getTutorialHandTarget, getTutorialStepView } from "../core/tutorial";
@@ -247,9 +249,24 @@ export class UIManager {
     }
     const state = this.controller.getState();
     const key = event.key.toLowerCase();
+    if ((event.target as HTMLElement | null)?.tagName === "INPUT") {
+      return;
+    }
+    const dialog = state.story.dialog;
+    if (dialog) {
+      const atChoice = dialog.index >= dialog.lines.length - 1 && dialog.options;
+      const choice = Number(key);
+      if (atChoice && Number.isInteger(choice) && choice >= 1 && choice <= dialog.options!.length) {
+        this.controller.dispatch({ type: "choose_dialog", optionIndex: choice - 1 });
+      } else if (!atChoice && (key === "enter" || key === " ")) {
+        event.preventDefault();
+        this.controller.dispatch({ type: "advance_dialog" });
+      }
+      return;
+    }
     if (state.phase === "menu") {
       if (key === "enter") {
-        this.controller.dispatch({ type: "start_new_run" });
+        this.controller.dispatch({ type: "start_campaign", fresh: !state.campaign.checkpoint });
       }
       return;
     }
@@ -360,6 +377,31 @@ export class UIManager {
         this.sheetOpen = false;
         this.render(this.controller.getState());
         break;
+      case "start-campaign": {
+        const fresh = actionElement.dataset.fresh !== "false";
+        if (fresh && this.controller.getState().campaign.checkpoint && actionElement.dataset.armed !== "true") {
+          actionElement.dataset.armed = "true";
+          actionElement.textContent = "Tap again to restart from Level 1";
+          break;
+        }
+        this.controller.dispatch({ type: "start_campaign", fresh });
+        break;
+      }
+      case "start-roguelike":
+        this.controller.dispatch({ type: "start_roguelike", seed: this.root.querySelector<HTMLInputElement>("#seed-input")?.value });
+        break;
+      case "retry-level":
+        this.controller.dispatch({ type: "retry_level" });
+        break;
+      case "return-to-menu":
+        this.controller.dispatch({ type: "return_to_menu" });
+        break;
+      case "advance-dialog":
+        this.controller.dispatch({ type: "advance_dialog" });
+        break;
+      case "choose-dialog":
+        this.controller.dispatch({ type: "choose_dialog", optionIndex: Number(actionElement.dataset.option) });
+        break;
       case "toggle-sound":
         toggleMuted();
         this.render(this.controller.getState());
@@ -371,6 +413,11 @@ export class UIManager {
         this.controller.dispatch({ type: "skip_tutorial" });
         break;
       case "replay-tutorial":
+        if (this.controller.getState().campaign.checkpoint && actionElement.dataset.armed !== "true") {
+          actionElement.dataset.armed = "true";
+          actionElement.textContent = "Tap again: this restarts the campaign";
+          break;
+        }
         this.controller.dispatch({ type: "replay_tutorial" });
         break;
       default:
@@ -456,7 +503,8 @@ export class UIManager {
             </span>
           `,
         ).join("")}
-        <span class="resource-pill cycle"><small>Mission</small><strong>${state.cycle}</strong></span>
+        <span class="resource-pill cycle"><small>${state.mode === "campaign" ? "Level" : "Mission"}</small><strong>${state.cycle}</strong></span>
+        ${state.mode === "roguelike" ? `<span class="resource-pill cycle seed"><small>Seed</small><strong>${formatSeed(state.sector.seed)}</strong></span>` : ""}
         ${soundToggle}
       </div>
     `;
@@ -507,6 +555,7 @@ export class UIManager {
         <div class="score-side friendly">
           <span class="side-label">Your ship</span>
           ${renderBar("Hull", state.ship.hull, state.ship.maxHull, "hull")}
+          ${this.renderEscortBar(state)}
           ${simulation.shieldsOffline ? `<span class="telegraph soft">Shields offline in the nebula</span>` : renderBar("Shield", state.ship.shield, state.ship.maxShield, "shield thin")}
         </div>
         <div class="score-center">
@@ -521,6 +570,11 @@ export class UIManager {
         ${controls}
       </div>
     `;
+  }
+
+  private renderEscortBar(state: RunState): string {
+    const hero = state.simulation.fighters.find((fighter) => fighter.hero);
+    return hero?.hero ? renderBar(`Escort · ${hero.hero.name}`, hero.hp, hero.maxHp, "escort thin-label") : "";
   }
 
   private renderSpeedControls(state: RunState): string {
@@ -572,7 +626,7 @@ export class UIManager {
         const action = reachableIds.has(node.id) && reachable.length > 1 ? `data-action="choose-node" data-node="${node.id}"` : "";
         return `
           <g class="map-node route-${node.route} ${status}" transform="translate(${columnX(node.column)} ${nodeY(node)})" ${action}>
-            <title>${this.getRouteName(node.cycle, node.route)}: ${ROUTES[node.route].blurb}</title>
+            <title>${node.title ?? this.getRouteName(node.cycle, node.route)}: ${ROUTES[node.route].blurb}</title>
             <circle r="${radius + 9}" class="map-hit" />
             <circle r="${radius}" class="map-disc" />
             ${silhouette}
@@ -594,7 +648,7 @@ export class UIManager {
     return `
       <div class="sector-map">
         <div class="route-heading">
-          <span class="eyebrow">Sector ${sector.index + 1} · ${choosing ? "Choose your next jump" : "Next up"}</span>
+          <span class="eyebrow">${state.mode === "campaign" ? `Campaign · Level ${state.cycle} of ${CAMPAIGN_LENGTH}` : `Uncharted sector ${sector.index + 1} · Seed ${formatSeed(sector.seed)} · ${choosing ? "Choose your next jump" : "Next up"}`}</span>
           <strong class="route-name">${state.simulation.encounterName}</strong>
           <span class="route-intel">${this.renderRouteIntel(state)}</span>
         </div>
@@ -663,6 +717,17 @@ export class UIManager {
 
     if (state.phase === "execution" && simulation.launchCountdown <= 0) {
       layers.push(`<div class="overlay-controls">${this.renderSpeedControls(state)}</div>`);
+    }
+
+    const comm = simulation.activeComm;
+    if (state.phase === "execution" && comm) {
+      const speaker = SPEAKERS[comm.line.speaker];
+      layers.push(`
+        <div class="comm-panel" style="--speaker-color:${speaker.color}">
+          <span class="dialog-portrait small">${speaker.short}</span>
+          <div><b>${speaker.name}</b><p>${comm.line.text}</p></div>
+        </div>
+      `);
     }
 
     if (state.phase === "execution" && state.paused) {
@@ -1089,24 +1154,66 @@ export class UIManager {
   }
 
   private renderMenuCard(state: RunState): string {
+    const progress = state.campaign;
+    const checkpoint = progress.checkpoint ? (JSON.parse(progress.checkpoint) as Pick<RunState, "cycle">) : undefined;
+    const continueLabel = checkpoint ? `Continue · Level ${checkpoint.cycle}: ${CAMPAIGN_LEVELS[checkpoint.cycle - 1]?.title ?? ""}` : "";
+    const uncharted = progress.roguelikeUnlocked
+      ? `
+        <div class="uncharted-row">
+          <input class="seed-input" id="seed-input" maxlength="24" placeholder="Seed" aria-label="Seed" />
+          <button class="ui-button primary" data-action="start-roguelike">Launch Uncharted ▸</button>
+        </div>
+        <small class="fine-print">Uncharted is the seeded roguelike: branching sectors with a boss every tenth jump. Leave the seed blank for a random run, or share one to share a run.</small>
+      `
+      : `<div class="uncharted-locked">${icon("lock")}<span><b>Uncharted</b> unlocks when you beat the Sector 1 campaign (${progress.highestLevelCleared}/${CAMPAIGN_LENGTH} levels).</span></div>`;
     return `
       <section class="menu-card">
         <h1>The Last Good Plan</h1>
-        <p class="menu-tagline">Build a ship, merge modules into bots, and let the mission run.</p>
-        <ol class="menu-steps">
-          <li><b>Build</b><span>Place modules on your 3×3 ship.</span></li>
-          <li><b>Merge</b><span>Fuse pairs or trios into autonomous bots.</span></li>
-          <li><b>Launch</b><span>Pick a jump and watch the plan play out.</span></li>
-        </ol>
-        <button class="mission-button primary-cta ready" data-action="start-new-run">Start New Run ▸</button>
+        <p class="menu-tagline">The Governor relocated your parents to the stars, for the public good. Borrow a mining hauler and bring them home.</p>
+        <div class="menu-actions">
+          ${checkpoint ? `<button class="mission-button primary-cta ready" data-action="start-campaign" data-fresh="false">${continueLabel} ▸</button>` : ""}
+          <button class="${checkpoint ? "ui-button" : "mission-button primary-cta ready"}" data-action="start-campaign" data-fresh="true">${checkpoint ? "New campaign" : "Start the campaign ▸"}</button>
+        </div>
+        ${uncharted}
         <button class="ui-button ghost" data-action="replay-tutorial">Replay tutorial</button>
-        <small class="fine-print">${state.meta.totalCyclesCompleted > 0 ? "Your discoveries and stars carry over between runs." : "Press Enter to start."}</small>
+      </section>
+    `;
+  }
+
+  private renderDialog(state: RunState): string {
+    const dialog = state.story.dialog;
+    if (!dialog) {
+      return "";
+    }
+    const current = dialog.lines[dialog.index];
+    const speaker = SPEAKERS[current.speaker];
+    const atChoice = dialog.index >= dialog.lines.length - 1 && dialog.options;
+    const controls = atChoice
+      ? `<div class="dialog-options">${dialog
+          .options!.map(
+            (option, index) =>
+              `<button class="ui-button dialog-option" data-action="choose-dialog" data-option="${index}"><kbd class="hotkey">${index + 1}</kbd>${option.label}</button>`,
+          )
+          .join("")}</div>`
+      : `<button class="ui-button primary dialog-next" data-action="advance-dialog">Next ▸ <kbd class="hotkey">Enter</kbd></button>`;
+    return `
+      <section class="modal-card dialog-card" style="--speaker-color:${speaker.color}">
+        <div class="dialog-portrait">${speaker.short}</div>
+        <div class="dialog-body">
+          <span class="dialog-speaker">${speaker.name}</span>
+          <p class="dialog-text" data-line="${dialog.index}">${current.text}</p>
+          ${controls}
+        </div>
       </section>
     `;
   }
 
   private renderModals(state: RunState): string {
     const layers: string[] = [];
+    const dialog = this.renderDialog(state);
+    if (dialog) {
+      return dialog;
+    }
 
     if ((state.phase === "results" || state.phase === "run_over") && state.summary) {
       layers.push(this.renderDebrief(state));
@@ -1205,14 +1312,25 @@ export class UIManager {
     ]
       .filter(Boolean)
       .join(" · ");
-    const primary = survived
-      ? `<button class="mission-button primary-cta ready" data-action="continue-results" ${chests.length > 0 || state.tutorial.active ? "disabled" : ""}>${chests.length > 0 ? "Open your chests first" : "Next mission ▸"}</button>`
-      : `<button class="mission-button primary-cta ready" data-action="start-new-run">Start fresh run ▸</button>`;
+    const level = getCampaignLevel(state);
+    const finale = level?.number === CAMPAIGN_LENGTH;
+    const blocked = chests.length > 0 || state.tutorial.active;
+    const menuButton = `<button class="ui-button ghost" data-action="return-to-menu">Main menu</button>`;
+    let primary: string;
+    if (survived && finale) {
+      primary = `<button class="mission-button primary-cta ready" data-action="start-roguelike" ${blocked ? "disabled" : ""}>${chests.length > 0 ? "Open your chests first" : "Into the Uncharted ▸"}</button>${menuButton}`;
+    } else if (survived) {
+      primary = `<button class="mission-button primary-cta ready" data-action="continue-results" ${blocked ? "disabled" : ""}>${chests.length > 0 ? "Open your chests first" : level ? "Next level ▸" : "Next mission ▸"}</button>`;
+    } else if (state.mode === "campaign") {
+      primary = `<button class="mission-button primary-cta ready" data-action="retry-level">Retry level ▸</button>${menuButton}`;
+    } else {
+      primary = `<button class="mission-button primary-cta ready" data-action="start-new-run">Start fresh run ▸</button>${menuButton}`;
+    }
 
     return `
       <section class="modal-card debrief ${survived ? "" : "failed"}" data-tutorial-target="summary-modal" data-summary-key="${state.cycle}-${summary.title}">
-        <span class="encounter-kicker">Mission ${state.cycle} · ${state.simulation.encounterName}</span>
-        <h2>${survived ? "Mission complete" : "The plan failed"}</h2>
+        <span class="encounter-kicker">${level ? `Campaign · ${state.simulation.encounterName}` : `Mission ${state.cycle} · ${state.simulation.encounterName}`}</span>
+        <h2>${survived ? (finale ? "Sector 1 cleared" : level ? "Level cleared" : "Mission complete") : summary.title}</h2>
         <div class="debrief-stars">${stars}</div>
         <div class="debrief-gains">${gains}</div>
         ${mvp}
